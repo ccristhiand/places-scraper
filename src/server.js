@@ -33,6 +33,11 @@ app.use('/api/demos',    require('./routes/demos'));
 app.use('/api/chat',     require('./routes/chat'));
 
 app.get('/api/wa/status', (req, res) => res.json({ status: wa.getStatus() }));
+app.get('/api/wa/qr', (req, res) => {
+  const qr = wa.getQR();
+  if (!qr) return res.json({ ok: false, msg: 'Sin QR disponible' });
+  res.json({ ok: true, qr });
+});
 app.post('/api/wa/conectar', async (req, res) => {
   try { await wa.connect(); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }

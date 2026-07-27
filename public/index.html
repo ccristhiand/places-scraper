@@ -208,10 +208,28 @@ function toggleWA() {
     if (!confirm('¿Cerrar sesión de WhatsApp?')) return;
     fetch('/api/wa/desconectar', { method: 'POST' });
   } else if (_waStatus === 'qr') {
-    document.getElementById('qrModal').classList.add('show');
+    verificarQR();
   } else {
     fetch('/api/wa/conectar', { method: 'POST' });
   }
+}
+
+function mostrarQR(src) {
+  var img = document.getElementById('qrImg');
+  img.src = src;
+  img.onerror = function() {
+    // Si falla la imagen base64, pedir por HTTP
+    fetch('/api/wa/qr').then(function(r){ return r.json(); }).then(function(d){
+      if (d.ok) img.src = d.qr;
+    });
+  };
+  document.getElementById('qrModal').classList.add('show');
+}
+
+function verificarQR() {
+  fetch('/api/wa/qr').then(function(r){ return r.json(); }).then(function(d){
+    if (d.ok) mostrarQR(d.qr);
+  }).catch(function(){});
 }
 
 // Iniciar socket cuando el DOM esté listo
@@ -220,8 +238,7 @@ window.addEventListener('load', function() {
     _socket = io({ transports: ['websocket','polling'] });
     _socket.on('wa:status', function(d){ updateWAStatus(d.status, d.numero); });
     _socket.on('wa:qr', function(d){
-      document.getElementById('qrImg').src = d.qr;
-      document.getElementById('qrModal').classList.add('show');
+      mostrarQR(d.qr);
     });
     _socket.on('wa:mensaje_entrante', function(){
       if (_vista === 'chat') return;

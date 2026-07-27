@@ -16,6 +16,7 @@ let sock      = null;
 let io        = null;
 let waStatus  = 'desconectado';
 let reconnectAttempts = 0;
+let lastQR    = null; // guardar ultimo QR para endpoint HTTP
 
 function setIO(socketIO) { io = socketIO; }
 function getStatus() { return waStatus; }
@@ -29,19 +30,30 @@ function normalizarNumero(tel) {
 }
 
 async function buscarNegocioPorNumero(numero) {
-  const normalizado = normalizarNumero(numero);
+  const normalizado = normalizarNumero(numero); // sin 51, solo 9 digitos
   const con51 = '51' + normalizado;
+  const ultimos9 = normalizado.slice(-9);
+
   try {
+    // Buscar con múltiples variantes del número
     const [rows] = await db.execute(`
       SELECT id, nombre FROM negocios
-      WHERE REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),     '+',''),' ','-'),'','') IN (?,?)
-         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono_int,''), '+',''),' ',''),'-','') IN (?,?)
-         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono,''),     '+',''),' ',''),'-','') IN (?,?,?)
+      WHERE REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),'+',''),' ',''),'-','') IN (?,?,?)
+         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono_int,''),'+',''),' ',''),'-','') IN (?,?,?)
+         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono,''),'+',''),' ',''),'-','') IN (?,?,?)
       LIMIT 1
-    `, [con51, normalizado, con51, normalizado, con51, normalizado, normalizado.slice(-9)]);
+    `, [con51, normalizado, ultimos9,
+        con51, normalizado, ultimos9,
+        con51, normalizado, ultimos9]);
+
+    if (rows[0]) {
+      console.log('  → Negocio encontrado:', rows[0].nombre);
+    } else {
+      console.log('  → Sin negocio asociado para número:', numero, '/ normalizado:', normalizado);
+    }
     return rows[0] || null;
   } catch(e) {
-    console.error('Error buscando negocio:', e.message);
+    console.error('  → Error buscando negocio:', e.message);
     return null;
   }
 }
@@ -73,6 +85,7 @@ async function connect() {
       waStatus = 'qr';
       try {
         const qrImg = await QRCode.toDataURL(qr);
+        lastQR = qrImg;
         emit('wa:qr', { qr: qrImg });
       } catch(e) {}
       emit('wa:status', { status: 'qr' });
@@ -156,12 +169,12 @@ async function connect() {
         }
 
         // Guardar siempre, con o sin negocio
+        console.log(`  → Intentando guardar en BD: negocio_id=${negocioId}, numero=${numero}`);
         await db.execute(
           'INSERT INTO chat_mensajes (negocio_id, numero, direccion, contenido, wa_id) VALUES (?,?,?,?,?)',
           [negocioId, numero, 'entrante', texto, msg.key.id || null]
         );
-
-        console.log(`  ✓ Guardado — negocio: ${negocio?.nombre || 'sin asociar'}`);
+        console.log(`  ✓ Guardado OK — negocio: ${negocio?.nombre || 'sin asociar (número '+numero+')'}`);
 
         // Emitir en tiempo real
         emit('wa:mensaje_entrante', {
@@ -198,4 +211,4 @@ async function desconectar() {
   emit('wa:status', { status: 'desconectado' });
 }
 
-module.exports = { connect, enviarMensaje, desconectar, setIO, getStatus };
+module.exports = { connect, enviarMensaje, desconectar, setIO, getStatus, getQR: () => lastQR };
