@@ -2,94 +2,130 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
 <title>Embudo de Ventas — Netcodip</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Places CRM</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --nav:#0f172a;--nav2:#1e293b;--accent:#3b82f6;--accent2:#2563eb;
-  --bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;
-  --green:#16a34a;--red:#dc2626;--yellow:#d97706;--purple:#7c3aed;
+  --nav:#0f172a;--accent:#3b82f6;
+  --bg:#f1f5f9;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;
+  --green:#16a34a;--red:#dc2626;
+  --bottom-h:60px;
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
 
-/* Sidebar */
-.sidebar{width:220px;background:var(--nav);display:flex;flex-direction:column;flex-shrink:0}
-.sidebar-logo{padding:1.25rem 1rem;border-bottom:1px solid rgba(255,255,255,.08)}
+/* ── SIDEBAR (desktop) ── */
+.sidebar{width:220px;background:var(--nav);display:flex;flex-direction:column;flex-shrink:0;transition:transform .25s}
+.sidebar-logo{padding:1.25rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between}
 .sidebar-logo h1{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.3px}
 .sidebar-logo p{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
+.sidebar-close{display:none;background:none;border:none;color:rgba(255,255,255,.6);font-size:20px;cursor:pointer;padding:0 4px}
 .sidebar-nav{flex:1;padding:.5rem 0;overflow-y:auto}
 .nav-group{padding:.5rem 1rem .25rem;font-size:10px;font-weight:600;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.06em}
-.nav-item{display:flex;align-items:center;gap:10px;padding:.6rem 1rem;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.nav-item{display:flex;align-items:center;gap:10px;padding:.65rem 1rem;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;transition:all .15s;border-left:3px solid transparent;user-select:none}
 .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
 .nav-item.active{background:rgba(59,130,246,.2);color:#93c5fd;border-left-color:var(--accent)}
-.nav-item .icon{width:18px;text-align:center;font-size:15px}
+.nav-item .icon{width:20px;text-align:center;font-size:16px}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;min-width:18px;text-align:center}
 
-/* WA Status */
+/* WA status sidebar */
 .wa-status{padding:.875rem 1rem;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px}
 .wa-dot{width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0}
 .wa-dot.conectado{background:#22c55e}
-.wa-dot.qr{background:#f59e0b;animation:pulse 1s infinite}
-.wa-dot.conectando{background:#f59e0b;animation:pulse 1s infinite}
+.wa-dot.qr,.wa-dot.conectando{background:#f59e0b;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .wa-info{flex:1;min-width:0}
 .wa-label{font-size:12px;color:rgba(255,255,255,.7);font-weight:500}
 .wa-sub{font-size:10px;color:rgba(255,255,255,.35);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wa-btn{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.6);font-size:11px;padding:4px 8px;border-radius:5px;cursor:pointer}
+.wa-btn{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.6);font-size:11px;padding:4px 8px;border-radius:5px;cursor:pointer;white-space:nowrap}
 .wa-btn:hover{background:rgba(255,255,255,.2);color:#fff}
 
-/* Main content */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.topbar{background:#fff;border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:12px;min-height:52px}
-.topbar h2{font-size:15px;font-weight:600}
-.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.content{flex:1;overflow-y:auto}
-iframe{width:100%;height:100%;border:none}
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:.75rem 1rem;display:flex;align-items:center;gap:10px;min-height:52px;flex-shrink:0}
+.topbar-menu{display:none;background:none;border:none;font-size:22px;cursor:pointer;padding:0;line-height:1}
+.topbar h2{font-size:15px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-wa{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;flex-shrink:0}
+.content{flex:1;overflow:hidden;position:relative}
+iframe{width:100%;height:100%;border:none;display:block}
 
-/* QR Modal */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
+/* ── BOTTOM NAV (mobile) ── */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:var(--bottom-h);background:#fff;border-top:1px solid var(--border);z-index:50;flex-direction:row}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--muted);font-size:9px;font-weight:500;padding:4px 2px;position:relative;border:none;background:none;transition:color .15s}
+.bn-item.active{color:var(--accent)}
+.bn-item .bn-icon{font-size:20px;line-height:1}
+.bn-badge{position:absolute;top:4px;right:calc(50% - 18px);background:var(--red);color:#fff;font-size:9px;padding:0 4px;border-radius:99px;min-width:16px;text-align:center;display:none}
+
+/* ── OVERLAY (mobile sidebar) ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90}
+.overlay.show{display:block}
+
+/* ── QR MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem}
 .modal-bg.show{display:flex}
-.qr-modal{background:#fff;border-radius:16px;padding:2rem;text-align:center;max-width:320px}
+.qr-modal{background:#fff;border-radius:16px;padding:2rem;text-align:center;width:100%;max-width:320px}
 .qr-modal h3{font-size:16px;font-weight:600;margin-bottom:.5rem}
-.qr-modal p{font-size:13px;color:var(--muted);margin-bottom:1.25rem}
-.qr-modal img{width:220px;height:220px;border-radius:8px;border:1px solid var(--border)}
+.qr-modal p{font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.5}
+.qr-modal img{width:200px;height:200px;border-radius:8px;border:1px solid var(--border)}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  body{flex-direction:column}
+  .sidebar{
+    position:fixed;top:0;left:0;bottom:0;z-index:100;
+    transform:translateX(-100%);width:260px
+  }
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-close{display:block}
+  .topbar-menu{display:block}
+  .bottom-nav{display:flex}
+  .content{padding-bottom:var(--bottom-h)}
+  .topbar{padding:.625rem 1rem}
+  .topbar h2{font-size:14px}
+  /* Ocultar WA status en topbar mobile — lo movemos al sidebar */
+  .topbar-wa span{display:none}
+}
 </style>
 </head>
 <body>
 
-<div class="sidebar">
+<!-- Overlay mobile -->
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
   <div class="sidebar-logo">
-    <h1>📍 Places CRM</h1>
-    <p>Sistema de ventas — Perú</p>
+    <div>
+      <h1>📍 Embudo Ventas</h1>
+      <p>Netcodip — CRM Perú</p>
+    </div>
+    <button class="sidebar-close" onclick="closeSidebar()">×</button>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-group">Prospección</div>
-    <div class="nav-item active" onclick="navTo('buscar','🔍 Buscar negocios',this)">
+    <div class="nav-item active" onclick="navTo('buscar','🔍 Buscar',this)">
       <span class="icon">🔍</span> Buscar
     </div>
     <div class="nav-item" onclick="navTo('contactos','👥 Contactos',this)">
       <span class="icon">👥</span> Contactos
     </div>
-
     <div class="nav-group">WhatsApp</div>
     <div class="nav-item" onclick="navTo('campanas','📝 Campañas',this)">
       <span class="icon">📝</span> Campañas
     </div>
-    <div class="nav-item" onclick="navTo('envios','📤 Envíos masivos',this)">
-      <span class="icon">📤</span> Envíos
+    <div class="nav-item" onclick="navTo('envios','📤 Envíos',this)">
+      <span class="icon">📤</span> Envíos masivos
     </div>
-    <div class="nav-item" onclick="navTo('chat','💬 Chat',this)" id="navChat">
-      <span class="icon">💬</span> Chat <span class="nav-badge" id="badgeChat" style="display:none">0</span>
+    <div class="nav-item" onclick="navTo('chat','💬 Chat',this)" id="navChatSide">
+      <span class="icon">💬</span> Chat
+      <span class="nav-badge" id="badgeChatSide" style="display:none">0</span>
     </div>
-
     <div class="nav-group">CRM</div>
-    <div class="nav-item" onclick="navTo('crm','📊 Embudo de ventas',this)">
+    <div class="nav-item" onclick="navTo('crm','📊 Embudo CRM',this)">
       <span class="icon">📊</span> Embudo CRM
     </div>
-    <div class="nav-item" onclick="navTo('demos','📅 Demos agendadas',this)">
+    <div class="nav-item" onclick="navTo('demos','📅 Demos',this)">
       <span class="icon">📅</span> Demos
     </div>
   </nav>
@@ -97,30 +133,58 @@ iframe{width:100%;height:100%;border:none}
     <div class="wa-dot" id="waDot"></div>
     <div class="wa-info">
       <div class="wa-label" id="waLabel">Desconectado</div>
-      <div class="wa-sub" id="waSub">Clic para conectar</div>
+      <div class="wa-sub" id="waSub">Toca para conectar</div>
     </div>
     <button class="wa-btn" id="waBtn" onclick="toggleWA()">Conectar</button>
   </div>
 </div>
 
+<!-- Main -->
 <div class="main">
   <div class="topbar">
+    <button class="topbar-menu" onclick="openSidebar()">☰</button>
     <h2 id="topTitle">🔍 Buscar negocios</h2>
-    <div class="topbar-right" id="topbarRight"></div>
+    <div class="topbar-wa" onclick="toggleWA()">
+      <div class="wa-dot" id="waDotTop"></div>
+      <span id="waLabelTop">WA</span>
+    </div>
   </div>
   <div class="content">
     <iframe id="frame" src="/views/buscar"></iframe>
   </div>
 </div>
 
+<!-- Bottom nav (mobile) -->
+<nav class="bottom-nav">
+  <button class="bn-item active" id="bn-buscar" onclick="navTo('buscar','🔍 Buscar',null,'buscar')">
+    <span class="bn-icon">🔍</span>Buscar
+  </button>
+  <button class="bn-item" id="bn-contactos" onclick="navTo('contactos','👥 Contactos',null,'contactos')">
+    <span class="bn-icon">👥</span>Contactos
+  </button>
+  <button class="bn-item" id="bn-chat" onclick="navTo('chat','💬 Chat',null,'chat')">
+    <span class="bn-icon">💬</span>Chat
+    <span class="bn-badge" id="badgeChat">0</span>
+  </button>
+  <button class="bn-item" id="bn-crm" onclick="navTo('crm','📊 CRM',null,'crm')">
+    <span class="bn-icon">📊</span>CRM
+  </button>
+  <button class="bn-item" id="bn-mas" onclick="openSidebar()">
+    <span class="bn-icon">☰</span>Más
+  </button>
+</nav>
+
 <!-- QR Modal -->
 <div class="modal-bg" id="qrModal">
   <div class="qr-modal">
     <h3>📱 Conectar WhatsApp</h3>
-    <p>Abre WhatsApp en tu celular → Dispositivos vinculados → Vincular dispositivo</p>
+    <p>Abre WhatsApp → Dispositivos vinculados → Vincular dispositivo → escanea el QR</p>
     <img id="qrImg" src="" alt="QR">
     <div style="margin-top:1rem">
-      <button onclick="document.getElementById('qrModal').classList.remove('show')" style="background:none;border:1px solid #ddd;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">Cancelar</button>
+      <button onclick="document.getElementById('qrModal').classList.remove('show')"
+        style="background:none;border:1px solid #ddd;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px">
+        Cerrar
+      </button>
     </div>
   </div>
 </div>
@@ -129,58 +193,103 @@ iframe{width:100%;height:100%;border:none}
 <script>
 const socket = io();
 let waStatusActual = 'desconectado';
+let vistaActual = 'buscar';
 
-// Nav
-function navTo(view, title, el) {
+// ── Navegación ────────────────────────────────────────────────────────────────
+function navTo(view, title, sideEl, bnKey) {
+  vistaActual = view;
+
+  // Sidebar activo
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  el.classList.add('active');
+  if (sideEl) sideEl.classList.add('active');
+  else {
+    // Buscar nav-item que corresponde
+    document.querySelectorAll('.nav-item').forEach(i => {
+      if (i.getAttribute('onclick')?.includes("'"+view+"'")) i.classList.add('active');
+    });
+  }
+
+  // Bottom nav activo
+  document.querySelectorAll('.bn-item').forEach(b => b.classList.remove('active'));
+  const bnId = 'bn-' + (bnKey || view);
+  const bnEl = document.getElementById(bnId);
+  if (bnEl) bnEl.classList.add('active');
+
   document.getElementById('topTitle').textContent = title;
   document.getElementById('frame').src = '/views/' + view;
+
+  // Limpiar badge chat
+  if (view === 'chat') {
+    document.getElementById('badgeChat').style.display = 'none';
+    document.getElementById('badgeChatSide').style.display = 'none';
+  }
+
+  closeSidebar();
 }
 
-// WhatsApp
-socket.on('wa:status', ({ status, numero }) => {
-  waStatusActual = status;
-  const dot   = document.getElementById('waDot');
-  const label = document.getElementById('waLabel');
-  const sub   = document.getElementById('waSub');
-  const btn   = document.getElementById('waBtn');
-  dot.className = 'wa-dot ' + status;
-  const map = { desconectado:['Desconectado','Clic para conectar','Conectar'], conectando:['Conectando...','Espera...','...'], qr:['Escanea el QR','Abriendo QR...','Ver QR'], conectado:['Conectado','WhatsApp activo','Salir'] };
-  const [l,s,b] = map[status] || map.desconectado;
-  label.textContent = l; sub.textContent = numero ? numero.split('@')[0] : s; btn.textContent = b;
-  if (status === 'conectado') document.getElementById('qrModal').classList.remove('show');
-});
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
 
+// ── WhatsApp ──────────────────────────────────────────────────────────────────
+function updateWAStatus(status, numero) {
+  waStatusActual = status;
+  const dots   = [document.getElementById('waDot'), document.getElementById('waDotTop')];
+  const label  = document.getElementById('waLabel');
+  const labelT = document.getElementById('waLabelTop');
+  const sub    = document.getElementById('waSub');
+  const btn    = document.getElementById('waBtn');
+
+  dots.forEach(d => { if(d) d.className = 'wa-dot ' + status; });
+
+  const map = {
+    desconectado: ['Desconectado', 'Toca para conectar', 'Conectar', 'WA'],
+    conectando:   ['Conectando...', 'Espera...', '...', '⏳'],
+    qr:           ['Escanea el QR', 'Abriendo QR...', 'Ver QR', '📷'],
+    conectado:    ['Conectado', numero ? numero.split('@')[0].slice(-4) : 'activo', 'Salir', '✅'],
+  };
+  const [l, s, b, lt] = map[status] || map.desconectado;
+  if(label) label.textContent = l;
+  if(labelT) labelT.textContent = lt;
+  if(sub) sub.textContent = s;
+  if(btn) btn.textContent = b;
+
+  if (status === 'conectado') document.getElementById('qrModal').classList.remove('show');
+}
+
+socket.on('wa:status', ({ status, numero }) => updateWAStatus(status, numero));
 socket.on('wa:qr', ({ qr }) => {
   document.getElementById('qrImg').src = qr;
   document.getElementById('qrModal').classList.add('show');
 });
 
-socket.on('wa:mensaje_entrante', ({ negocioId }) => {
-  const badge = document.getElementById('badgeChat');
-  const n = (parseInt(badge.textContent)||0)+1;
-  badge.textContent = n; badge.style.display='';
+socket.on('wa:mensaje_entrante', () => {
+  if (vistaActual === 'chat') return;
+  const badge  = document.getElementById('badgeChat');
+  const badgeS = document.getElementById('badgeChatSide');
+  const n = (parseInt(badge.textContent) || 0) + 1;
+  badge.textContent = n;  badge.style.display = '';
+  badgeS.textContent = n; badgeS.style.display = '';
 });
 
 async function toggleWA() {
   if (waStatusActual === 'conectado') {
     if (!confirm('¿Cerrar sesión de WhatsApp?')) return;
-    await fetch('/api/wa/desconectar', { method:'POST' });
+    await fetch('/api/wa/desconectar', { method: 'POST' });
   } else if (waStatusActual === 'qr') {
     document.getElementById('qrModal').classList.add('show');
   } else {
-    await fetch('/api/wa/conectar', { method:'POST' });
+    await fetch('/api/wa/conectar', { method: 'POST' });
   }
 }
 
-// Limpiar badge al entrar al chat
-document.getElementById('navChat').addEventListener('click', () => {
-  document.getElementById('badgeChat').style.display='none';
-});
-
 // Estado inicial
-fetch('/api/wa/status').then(r=>r.json()).then(d => socket.emit('wa:status', d));
+fetch('/api/wa/status').then(r => r.json()).then(d => updateWAStatus(d.status, d.numero));
 </script>
 </body>
 </html>

@@ -1,0 +1,86 @@
+/* Shared responsive styles for all views */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#2563eb;--accent-h:#1d4ed8;
+  --bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--border-s:#f0f0f0;
+  --text:#1e293b;--muted:#64748b;--faint:#94a3b8;
+  --green:#16a34a;--red:#dc2626;--yellow:#d97706;--purple:#7c3aed;
+  --radius:10px;--radius-s:7px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;margin-bottom:.875rem}
+.card-h{padding:.75rem 1rem;border-bottom:1px solid var(--border-s);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.card-h h2,.card-h h3{font-size:13px;font-weight:600}
+.card-b{padding:1rem}
+
+/* Buttons */
+.btn{height:36px;padding:0 14px;border-radius:var(--radius-s);font-size:13px;font-weight:500;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-h)}
+.btn-primary:disabled{background:#93c5fd;cursor:not-allowed}
+.btn-success{background:#16a34a;color:#fff}.btn-success:hover{background:#15803d}
+.btn-success:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{background:#fff;border:1px solid var(--border);color:#374151}.btn-outline:hover{background:#f8fafc}
+.btn-danger{background:#fef2f2;border:1px solid #fecaca;color:var(--red)}
+.btn-sm{height:28px;padding:0 10px;font-size:12px}
+.btn-xs{height:24px;padding:0 8px;font-size:11px}
+
+/* Form fields */
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:.75rem}
+.field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.field input,.field select,.field textarea{border:1px solid var(--border);border-radius:var(--radius-s);padding:8px 10px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+.field select{height:36px;padding:0 10px}
+.field input{height:36px}
+.field textarea{resize:vertical;min-height:80px}
+
+/* Grid layouts */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.875rem}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:.875rem}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem}
+
+/* Stat cards */
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem}
+.stat-n{font-size:22px;font-weight:700;color:var(--text)}
+.stat-l{font-size:11px;color:var(--faint);margin-top:2px}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:500px}
+th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+tr:hover td{background:#fafafa}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600}
+.b-green{background:#dcfce7;color:#15803d}
+.b-blue{background:#dbeafe;color:#1d4ed8}
+.b-yellow{background:#fef9c3;color:#854d0e}
+.b-orange{background:#ffedd5;color:#9a3412}
+.b-purple{background:#f3e8ff;color:#7e22ce}
+.b-red{background:#fee2e2;color:#991b1b}
+.b-gray{background:#f1f5f9;color:#64748b}
+
+/* Alerts */
+.alert{padding:.75rem 1rem;border-radius:var(--radius-s);font-size:13px;margin-bottom:.875rem;display:none}
+.alert-ok{background:#f0fdf4;border-left:3px solid #22c55e;color:#15803d}
+.alert-err{background:#fef2f2;border-left:3px solid #ef4444;color:#991b1b}
+.alert-warn{background:#fffbeb;border-left:3px solid #f59e0b;color:#92400e}
+
+/* Empty state */
+.empty{text-align:center;padding:3rem 1rem;color:var(--faint)}
+.empty-icon{font-size:40px;margin-bottom:.75rem}
+
+/* Page padding */
+.page{padding:1rem}
+
+/* Responsive overrides */
+@media(max-width:640px){
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+  .btn{height:40px;font-size:14px}
+  .field input,.field select{height:42px;font-size:15px}
+  table{min-width:400px}
+  .card-h{flex-direction:column;align-items:flex-start}
+  .card-h > div{width:100%}
+}

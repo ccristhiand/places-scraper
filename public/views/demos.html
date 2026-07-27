@@ -1,174 +1,125 @@
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;padding:1.25rem;display:flex;gap:1rem;height:100vh;overflow:hidden}
-.left{flex:1;display:flex;flex-direction:column;gap:1rem;overflow:hidden}
-.right{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:1rem;overflow-y:auto}
-.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden}
-.card-h{padding:.75rem 1.25rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
-.card-h h3{font-size:13px;font-weight:600}
-.card-b{padding:1rem}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex-shrink:0}
-.stat{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:.625rem .875rem;text-align:center}
-.stat-n{font-size:20px;font-weight:700}.stat-l{font-size:10px;color:#94a3b8}
-.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:0}
-.f-inp{height:30px;padding:0 8px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px}
-.f-inp:focus{outline:none;border-color:#3b82f6}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{background:#f8fafc;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;border-bottom:1px solid #e2e8f0;white-space:nowrap}
-td{padding:9px 10px;border-bottom:1px solid #f8fafc;vertical-align:middle}
-tr:hover td{background:#fafafa}
-.badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600}
-.b-ag{background:#dbeafe;color:#1d4ed8}.b-re{background:#dcfce7;color:#15803d}.b-ca{background:#fee2e2;color:#991b1b}.b-rp{background:#fef9c3;color:#854d0e}
-.tipo-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600}
-.t-vi{background:#eff6ff;color:#2563eb}.t-pr{background:#f1f5f9;color:#475569}.t-te{background:#f0fdf4;color:#16a34a}
-.btn{height:26px;padding:0 10px;border-radius:6px;font-size:11px;font-weight:500;border:none;cursor:pointer}
-.btn-outline{background:#fff;border:1px solid #e2e8f0;color:#374151}.btn-outline:hover{background:#f8fafc}
-.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
-.btn-red{background:#fef2f2;border:1px solid #fecaca;color:#dc2626}
-.btn-green{background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a}
-.f{display:flex;flex-direction:column;gap:4px;margin-bottom:.75rem}
-.f label{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
-.f input,.f select,.f textarea{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit}
-.f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:#3b82f6}
-.f textarea{resize:vertical;min-height:70px}
-.demo-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:.875rem;margin-bottom:.625rem}
-.demo-time{font-size:13px;font-weight:700;color:#2563eb;margin-bottom:4px}
-.demo-name{font-size:13px;font-weight:600}
-.demo-sub{font-size:11px;color:#64748b;margin-top:3px}
-.scroll{overflow-y:auto;flex:1}
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<link rel="stylesheet" href="/css/shared.css">
+<style>
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.625rem;margin-bottom:.875rem}
+.demo-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:.875rem;margin-bottom:.625rem}
+.demo-time{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:3px}
+.demo-name{font-size:14px;font-weight:600}
+.demo-meta{font-size:11px;color:var(--muted);margin-top:3px}
+.demo-actions{display:flex;gap:6px;margin-top:.625rem;flex-wrap:wrap}
+.nresult{padding:.5rem;border-bottom:1px solid var(--border-s);cursor:pointer;font-size:12px}
+.nresult:hover{background:#f8fafc}
+@media(max-width:640px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .layout{flex-direction:column}
+  .layout .right{width:100%}
+}
 </style></head><body>
+<div class="page">
 
-<div class="left">
-  <div class="stats" id="statsGrid"></div>
+<div class="stats" id="statsGrid"></div>
 
-  <div class="card" style="flex-shrink:0">
-    <div class="card-h">
-      <h3>📅 Demos agendadas</h3>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input class="f-inp" type="date" id="fDesde" onchange="load()">
-        <span style="font-size:12px;color:#94a3b8">hasta</span>
-        <input class="f-inp" type="date" id="fHasta" onchange="load()">
-        <select class="f-inp" id="fEstado" onchange="load()">
-          <option value="">Todos</option><option value="agendada">Agendadas</option>
-          <option value="realizada">Realizadas</option><option value="cancelada">Canceladas</option>
-        </select>
-        <button class="btn btn-outline" onclick="load()">🔄</button>
+<div style="display:flex;gap:1rem;flex-wrap:wrap" class="layout">
+  <!-- Lista demos -->
+  <div style="flex:1;min-width:0">
+    <div class="card">
+      <div class="card-h">
+        <h3>📅 Demos</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input type="date" id="fDesde" class="btn btn-outline btn-sm" style="height:28px;padding:0 8px;font-size:11px" onchange="load()">
+          <select id="fEstado" onchange="load()" style="height:28px;border:1px solid var(--border);border-radius:6px;font-size:11px;padding:0 6px">
+            <option value="">Todas</option><option value="agendada">Agendadas</option>
+            <option value="realizada">Realizadas</option><option value="cancelada">Canceladas</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="load()">🔄</button>
+        </div>
       </div>
+      <div id="demosList" style="padding:.625rem"></div>
     </div>
-    <div style="overflow-x:auto">
-      <table><thead><tr>
-        <th>Fecha y hora</th><th>Negocio</th><th>Tipo</th><th>Responsable</th>
-        <th>Estado</th><th>Recordatorios</th><th>Acciones</th>
-      </tr></thead><tbody id="tbody"></tbody></table>
-      <div id="empty" style="text-align:center;padding:2rem;color:#94a3b8;font-size:13px;display:none">Sin demos agendadas en el período seleccionado</div>
+  </div>
+
+  <!-- Formulario nueva demo -->
+  <div style="width:320px;flex-shrink:0" class="right">
+    <div class="card">
+      <div class="card-h"><h3>➕ Agendar demo</h3></div>
+      <div class="card-b">
+        <div class="field">
+          <label>Buscar contacto</label>
+          <input id="nSearch" placeholder="Nombre del negocio..." oninput="searchNeg()">
+          <div id="nResults" style="display:none;border:1px solid var(--border);border-radius:8px;max-height:120px;overflow-y:auto;margin-top:4px"></div>
+          <input type="hidden" id="nId">
+          <div id="nSelected" style="font-size:12px;color:var(--accent);margin-top:4px;font-weight:500"></div>
+        </div>
+        <div class="field"><label>Título</label><input id="dTitulo" placeholder="Demo / Presentación..."></div>
+        <div class="field"><label>Fecha y hora</label><input id="dFecha" type="datetime-local"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.625rem">
+          <div class="field" style="margin-bottom:0">
+            <label>Duración</label>
+            <select id="dDuracion"><option value="30">30 min</option><option value="60" selected>1 hora</option><option value="90">1.5h</option><option value="120">2h</option></select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Tipo</label>
+            <select id="dTipo"><option value="virtual">🖥️ Virtual</option><option value="presencial">🏢 Presencial</option><option value="telefonica">📞 Tel.</option></select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:.75rem"><label>Enlace (Zoom/Meet)</label><input id="dEnlace" placeholder="https://..."></div>
+        <div class="field"><label>Responsable</label><input id="dResp" placeholder="Tu nombre"></div>
+        <div class="field"><label>Notas</label><textarea id="dNotas" placeholder="Preparar demo de..."></textarea></div>
+        <button onclick="guardarDemo()" class="btn btn-primary" style="width:100%;justify-content:center">📅 Agendar</button>
+        <p style="font-size:11px;color:var(--faint);text-align:center;margin-top:.5rem">✅ Recordatorio automático por WA 24h y 1h antes</p>
+      </div>
     </div>
   </div>
 </div>
-
-<div class="right">
-  <div class="card">
-    <div class="card-h"><h3>📅 Agendar nueva demo</h3></div>
-    <div class="card-b">
-      <div class="f"><label>Negocio / Contacto</label>
-        <input id="nSearch" placeholder="Buscar por nombre..." oninput="searchNeg()" style="margin-bottom:4px">
-        <div id="nResults" style="display:none;border:1px solid #e2e8f0;border-radius:8px;max-height:120px;overflow-y:auto;font-size:12px"></div>
-        <input type="hidden" id="nId">
-        <div id="nSelected" style="font-size:12px;color:#2563eb;margin-top:4px"></div>
-      </div>
-      <div class="f"><label>Título</label><input id="dTitulo" placeholder="Demo de producto / Presentación..."></div>
-      <div class="f"><label>Fecha y hora</label><input id="dFecha" type="datetime-local"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div class="f"><label>Duración</label><select id="dDuracion"><option value="30">30 min</option><option value="60" selected>1 hora</option><option value="90">1.5 horas</option><option value="120">2 horas</option></select></div>
-        <div class="f"><label>Tipo</label><select id="dTipo"><option value="virtual">🖥️ Virtual</option><option value="presencial">🏢 Presencial</option><option value="telefonica">📞 Telefónica</option></select></div>
-      </div>
-      <div class="f"><label>Enlace (Zoom/Meet)</label><input id="dEnlace" placeholder="https://zoom.us/j/..."></div>
-      <div class="f"><label>Responsable</label><input id="dResp" placeholder="Tu nombre"></div>
-      <div class="f"><label>Notas</label><textarea id="dNotas" placeholder="Preparar demo de módulo X..."></textarea></div>
-      <button onclick="guardarDemo()" style="width:100%;height:34px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer">📅 Agendar demo</button>
-      <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:.5rem">✅ Se enviará recordatorio automático por WA 24h y 1h antes</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-h"><h3>🔔 Próximas (7 días)</h3></div>
-    <div class="card-b" id="proximas" style="padding:.625rem .875rem"></div>
-  </div>
 </div>
 
 <script>
-let demos=[], negBusqueda=[];
-
-const EST_C={agendada:'b-ag',realizada:'b-re',cancelada:'b-ca',reprogramada:'b-rp'};
-const EST_L={agendada:'📅 Agendada',realizada:'✅ Realizada',cancelada:'❌ Cancelada',reprogramada:'🔄 Reprogramada'};
-const TIPO_C={virtual:'t-vi',presencial:'t-pr',telefonica:'t-te'};
+const EST_C={agendada:'b-blue',realizada:'b-green',cancelada:'b-red',reprogramada:'b-yellow'};
+const EST_L={agendada:'📅 Agendada',realizada:'✅ Realizada',cancelada:'❌ Cancelada',reprogramada:'🔄 Reprog.'};
 
 async function load(){
-  const desde=document.getElementById('fDesde').value, hasta=document.getElementById('fHasta').value, estado=document.getElementById('fEstado').value;
-  let url=`/api/demos?${desde?'desde='+desde+'T00:00':''}${hasta?'&hasta='+hasta+'T23:59':''}${estado?'&estado='+estado:''}`;
-  const data=await fetch(url).then(r=>r.json()).catch(()=>({rows:[]}));
-  demos=data.rows||[];
-  render();
-  loadProximas();
-  loadStats();
-}
-
-function render(){
-  document.getElementById('empty').style.display=demos.length?'none':'block';
-  document.getElementById('tbody').innerHTML=demos.map(d=>`<tr>
-    <td>
-      <div style="font-weight:600;font-size:12px">${fmtDT(d.fecha_hora)}</div>
-      <div style="font-size:10px;color:#94a3b8">${d.duracion_min} min</div>
-    </td>
-    <td>
-      <div style="font-weight:500;font-size:12px">${d.nombre}</div>
-      <div style="font-size:10px;color:#94a3b8">${[d.distrito,d.provincia].filter(Boolean).join(', ')||''}</div>
-    </td>
-    <td><span class="tipo-badge ${TIPO_C[d.tipo]||'t-vi'}">${d.tipo}</span></td>
-    <td style="font-size:11px;color:#64748b">${d.responsable||'—'}</td>
-    <td><span class="badge ${EST_C[d.estado]||'b-ag'}">${EST_L[d.estado]||d.estado}</span></td>
-    <td style="font-size:10px">
-      ${d.recordatorio_24h?'<span style="color:#16a34a">✓ 24h</span>':'<span style="color:#cbd5e1">○ 24h</span>'}
-      ${d.recordatorio_1h ?'<span style="color:#16a34a;margin-left:4px">✓ 1h</span>' :'<span style="color:#cbd5e1;margin-left:4px">○ 1h</span>'}
-    </td>
-    <td>
-      <div style="display:flex;gap:4px">
-        ${d.estado==='agendada'?`<button class="btn btn-green" onclick="cambiarEstado(${d.id},'realizada')">✅</button><button class="btn btn-red" onclick="cambiarEstado(${d.id},'cancelada')">❌</button>`:''}
-        ${d.enlace?`<a href="${d.enlace}" target="_blank"><button class="btn btn-outline">🔗</button></a>`:''}
-        <button class="btn btn-red" onclick="eliminar(${d.id})">🗑️</button>
-      </div>
-    </td>
-  </tr>`).join('');
-}
-
-async function loadProximas(){
-  const ahora=new Date(), en7=new Date(ahora.getTime()+7*86400000);
-  const url=`/api/demos?estado=agendada&desde=${ahora.toISOString().slice(0,10)}T00:00&hasta=${en7.toISOString().slice(0,10)}T23:59`;
+  const desde=document.getElementById('fDesde').value, estado=document.getElementById('fEstado').value;
+  let url=`/api/demos?${desde?'desde='+desde+'T00:00':''}${estado?'&estado='+estado:''}`;
   const data=await fetch(url).then(r=>r.json()).catch(()=>({rows:[]}));
   const rows=data.rows||[];
-  document.getElementById('proximas').innerHTML=rows.length?rows.map(d=>`
+  const el=document.getElementById('demosList');
+  if(!rows.length){el.innerHTML='<div class="empty"><div class="empty-icon">📅</div><p>Sin demos en este período</p></div>';return;}
+  el.innerHTML=rows.map(d=>`
     <div class="demo-card">
-      <div class="demo-time">🕐 ${fmtDT(d.fecha_hora)}</div>
+      <div class="demo-time">🕐 ${fmt(d.fecha_hora)}</div>
       <div class="demo-name">${d.nombre}</div>
-      <div class="demo-sub">${d.tipo} · ${d.duracion_min} min${d.enlace?` · <a href="${d.enlace}" target="_blank" style="color:#2563eb">Link ↗</a>`:''}</div>
-    </div>`).join(''):'<div style="text-align:center;color:#94a3b8;font-size:12px;padding:1rem">Sin demos próximas</div>';
+      <div class="demo-meta">${d.tipo} · ${d.duracion_min} min${d.responsable?' · '+d.responsable:''}</div>
+      ${d.enlace?`<a href="${d.enlace}" target="_blank" style="font-size:11px;color:var(--accent)">🔗 Abrir enlace</a>`:''}
+      <div class="demo-actions">
+        <span class="badge ${EST_C[d.estado]||'b-gray'}">${EST_L[d.estado]||d.estado}</span>
+        ${d.estado==='agendada'?`
+          <button class="btn btn-xs b-green" onclick="cambiar(${d.id},'realizada')" style="border:1px solid #bbf7d0;background:#f0fdf4;color:#15803d">✅ Realizada</button>
+          <button class="btn btn-xs b-red" onclick="cambiar(${d.id},'cancelada')" style="border:1px solid #fecaca;background:#fef2f2;color:#dc2626">❌ Cancelar</button>`:''}
+        <button class="btn btn-xs btn-outline" onclick="eliminar(${d.id})">🗑️</button>
+      </div>
+      <div style="font-size:10px;color:var(--faint);margin-top:4px">
+        Recordatorios: ${d.recordatorio_24h?'✓ 24h':'○ 24h'} ${d.recordatorio_1h?'✓ 1h':'○ 1h'}
+      </div>
+    </div>`).join('');
+  loadStats();
 }
 
 async function loadStats(){
   const data=await fetch('/api/demos').then(r=>r.json()).catch(()=>({rows:[]}));
   const rows=data.rows||[];
-  const ag=rows.filter(r=>r.estado==='agendada').length, re=rows.filter(r=>r.estado==='realizada').length, ca=rows.filter(r=>r.estado==='cancelada').length;
-  document.getElementById('statsGrid').innerHTML=`
-    <div class="stat"><div class="stat-n">${rows.length}</div><div class="stat-l">Total demos</div></div>
-    <div class="stat"><div class="stat-n" style="color:#2563eb">${ag}</div><div class="stat-l">Agendadas</div></div>
-    <div class="stat"><div class="stat-n" style="color:#16a34a">${re}</div><div class="stat-l">Realizadas</div></div>
-    <div class="stat"><div class="stat-n" style="color:#dc2626">${ca}</div><div class="stat-l">Canceladas</div></div>`;
+  const ag=rows.filter(r=>r.estado==='agendada').length;
+  const re=rows.filter(r=>r.estado==='realizada').length;
+  const ca=rows.filter(r=>r.estado==='cancelada').length;
+  document.getElementById('statsGrid').innerHTML=[
+    {n:rows.length,l:'Total demos'},{n:ag,l:'Agendadas',c:'color:var(--accent)'},{n:re,l:'Realizadas',c:'color:var(--green)'},{n:ca,l:'Canceladas',c:'color:var(--red)'}
+  ].map(s=>`<div class="stat"><div class="stat-n" ${s.c?'style="'+s.c+'"':''}>${s.n}</div><div class="stat-l">${s.l}</div></div>`).join('');
 }
 
-async function cambiarEstado(id, estado){
+async function cambiar(id,estado){
   await fetch(`/api/demos/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado})});
   load();
 }
-
 async function eliminar(id){
   if(!confirm('¿Eliminar esta demo?'))return;
   await fetch(`/api/demos/${id}`,{method:'DELETE'});
@@ -177,43 +128,36 @@ async function eliminar(id){
 
 async function searchNeg(){
   const q=document.getElementById('nSearch').value.trim();
-  if(q.length<2){ document.getElementById('nResults').style.display='none'; return; }
-  const data=await fetch(`/api/negocios?q=${encodeURIComponent(q)}&limit=8`).then(r=>r.json()).catch(()=>({rows:[]}));
-  const rows=data.rows||[];
+  if(q.length<2){document.getElementById('nResults').style.display='none';return;}
+  const data=await fetch(`/api/negocios?q=${encodeURIComponent(q)}&limit=6`).then(r=>r.json()).catch(()=>({rows:[]}));
   const el=document.getElementById('nResults');
   el.style.display='block';
-  el.innerHTML=rows.map(r=>`<div onclick="selNeg(${r.id},'${r.nombre.replace(/'/g,"\\'")}','${r.telefono||''}')" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;hover:background:#f8fafc">
-    <div style="font-weight:500">${r.nombre}</div><div style="font-size:10px;color:#94a3b8">${r.telefono||''} · ${r.distrito||''}</div>
-  </div>`).join('');
+  el.innerHTML=(data.rows||[]).map(r=>`<div class="nresult" onclick="selNeg(${r.id},'${r.nombre.replace(/'/g,"\\'")}','${r.telefono||''}')"><b>${r.nombre}</b><br><span style="color:var(--faint)">${r.telefono||''} · ${r.distrito||''}</span></div>`).join('');
 }
-
-function selNeg(id, nombre, tel){
+function selNeg(id,nombre,tel){
   document.getElementById('nId').value=id;
-  document.getElementById('nSelected').textContent='✓ '+nombre+' ('+tel+')';
+  document.getElementById('nSelected').textContent='✓ '+nombre;
   document.getElementById('nSearch').value=nombre;
   document.getElementById('nResults').style.display='none';
 }
-
 async function guardarDemo(){
   const nId=document.getElementById('nId').value;
   if(!nId) return alert('Selecciona un contacto');
   const fecha=document.getElementById('dFecha').value;
   if(!fecha) return alert('Selecciona fecha y hora');
-  const body={negocio_id:+nId,titulo:document.getElementById('dTitulo').value||'Demo',fecha_hora:fecha,duracion_min:+document.getElementById('dDuracion').value,tipo:document.getElementById('dTipo').value,enlace:document.getElementById('dEnlace').value,responsable:document.getElementById('dResp').value,notas:document.getElementById('dNotas').value};
+  const body={negocio_id:+nId,titulo:document.getElementById('dTitulo').value||'Demo',fecha_hora:fecha,
+    duracion_min:+document.getElementById('dDuracion').value,tipo:document.getElementById('dTipo').value,
+    enlace:document.getElementById('dEnlace').value,responsable:document.getElementById('dResp').value,notas:document.getElementById('dNotas').value};
   const r=await fetch('/api/demos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const d=await r.json();
   if(!d.ok) return alert('Error: '+d.error);
   ['dTitulo','dFecha','dEnlace','dResp','dNotas','nSearch','nId'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('nSelected').textContent='';
-  alert('✅ Demo agendada. Se enviarán recordatorios automáticos por WhatsApp 24h y 1h antes.');
+  alert('✅ Demo agendada. Recordatorio automático activado por WhatsApp.');
   load();
 }
+function fmt(dt){return new Date(dt).toLocaleString('es-PE',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
 
-function fmtDT(dt){ return new Date(dt).toLocaleString('es-PE',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
-
-// Defaults: desde hoy, hasta en 30 días
 const hoy=new Date(); document.getElementById('fDesde').value=hoy.toISOString().slice(0,10);
-const en30=new Date(hoy.getTime()+30*86400000); document.getElementById('fHasta').value=en30.toISOString().slice(0,10);
-
 load();
 </script></body></html>

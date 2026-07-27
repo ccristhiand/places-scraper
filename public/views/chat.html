@@ -1,175 +1,370 @@
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><style>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;display:flex;height:100vh;overflow:hidden}
-.contacts{width:300px;flex-shrink:0;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column}
-.contacts-h{padding:.875rem 1rem;border-bottom:1px solid #e2e8f0;font-size:13px;font-weight:600}
-.search{padding:.625rem .875rem;border-bottom:1px solid #f0f0f0}
-.search input{width:100%;height:32px;padding:0 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px}
-.search input:focus{outline:none;border-color:#3b82f6}
+.contacts{width:290px;flex-shrink:0;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column}
+.contacts-h{padding:.875rem 1rem;border-bottom:1px solid #e2e8f0;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.wa-dot{width:8px;height:8px;border-radius:50%;background:#e2e8f0;flex-shrink:0}
+.wa-dot.on{background:#22c55e}
+.wa-dot.pulse{background:#f59e0b;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.search{padding:.5rem .875rem;border-bottom:1px solid #f0f0f0}
+.search input{width:100%;height:30px;padding:0 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px}
+.search input:focus{outline:none;border-color:#25d366}
 .contact-list{flex:1;overflow-y:auto}
-.contact-item{padding:.75rem 1rem;cursor:pointer;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;transition:background .1s}
+.contact-item{padding:.625rem 1rem;cursor:pointer;border-bottom:1px solid #f8fafc;display:flex;align-items:center;gap:10px;transition:background .1s}
 .contact-item:hover{background:#f8fafc}
-.contact-item.active{background:#eff6ff}
-.avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
+.contact-item.active{background:#f0fdf4}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;position:relative}
+.avatar.new::after{content:'';position:absolute;top:0;right:0;width:10px;height:10px;background:#25d366;border-radius:50%;border:2px solid #fff}
 .ci-info{flex:1;min-width:0}
-.ci-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ci-last{font-size:11px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
-.ci-badge{background:#25d366;color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;flex-shrink:0}
-.chat-area{flex:1;display:flex;flex-direction:column;background:#e5ddd5;background-image:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
-.chat-header{background:#fff;border-bottom:1px solid #e2e8f0;padding:.75rem 1.25rem;display:flex;align-items:center;gap:10px}
-.chat-header .avatar{width:36px;height:36px;font-size:13px}
-.ch-name{font-size:14px;font-weight:600}
+.ci-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci-last{font-size:11px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.ci-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.ci-time{font-size:10px;color:#94a3b8}
+.ci-badge{background:#25d366;color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;min-width:18px;text-align:center}
+.chat-area{flex:1;display:flex;flex-direction:column;background:#e5ddd5}
+.chat-header{background:#fff;border-bottom:1px solid #e2e8f0;padding:.625rem 1.25rem;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ch-name{font-size:13px;font-weight:600}
 .ch-sub{font-size:11px;color:#94a3b8}
-.msgs{flex:1;overflow-y:auto;padding:1rem}
-.msg-wrap{display:flex;margin-bottom:.625rem}
+.msgs{flex:1;overflow-y:auto;padding:.875rem;display:flex;flex-direction:column;gap:.375rem}
+.msg-wrap{display:flex}
 .msg-wrap.out{justify-content:flex-end}
-.bubble{max-width:70%;padding:.625rem .875rem;border-radius:10px;font-size:13px;line-height:1.5;position:relative}
-.bubble.in{background:#fff;border-radius:0 10px 10px 10px;box-shadow:0 1px 2px rgba(0,0,0,.1)}
-.bubble.out{background:#dcf8c6;border-radius:10px 10px 0 10px;box-shadow:0 1px 2px rgba(0,0,0,.1)}
-.bubble-time{font-size:10px;color:#94a3b8;text-align:right;margin-top:3px}
-.bubble-media{width:100%;border-radius:6px;margin-bottom:6px;max-height:200px;object-fit:cover}
-.empty-chat{display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8}
-.empty-chat div{text-align:center}
-.chat-input{background:#fff;border-top:1px solid #e2e8f0;padding:.75rem 1rem;display:flex;gap:8px;align-items:flex-end}
-.chat-input textarea{flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:.625rem .875rem;font-size:13px;font-family:inherit;resize:none;max-height:120px;min-height:38px}
+.bubble{max-width:72%;padding:.5rem .875rem;border-radius:10px;font-size:13px;line-height:1.5}
+.bubble.in{background:#fff;border-radius:0 10px 10px 10px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.bubble.out{background:#dcf8c6;border-radius:10px 10px 0 10px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.bubble.nuevo{animation:slideIn .3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.bubble-text{white-space:pre-wrap;word-break:break-word}
+.bubble-time{font-size:10px;color:#94a3b8;text-align:right;margin-top:2px}
+.bubble-media{width:100%;border-radius:6px;margin-bottom:5px;max-height:180px;object-fit:cover}
+.date-sep{text-align:center;font-size:10px;color:#94a3b8;background:rgba(255,255,255,.7);padding:2px 10px;border-radius:99px;margin:.375rem auto;display:table}
+.empty-chat{flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8;text-align:center}
+.chat-input{background:#fff;border-top:1px solid #e2e8f0;padding:.625rem 1rem;display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+.chat-input textarea{flex:1;border:1px solid #e2e8f0;border-radius:20px;padding:.5rem .875rem;font-size:13px;font-family:inherit;resize:none;max-height:100px;min-height:36px;line-height:1.4}
 .chat-input textarea:focus{outline:none;border-color:#25d366}
-.send-btn{width:40px;height:40px;background:#25d366;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;transition:background .15s}
+.send-btn{width:38px;height:38px;background:#25d366;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .send-btn:hover{background:#1da851}
-.img-btn{width:36px;height:36px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px}
-.date-sep{text-align:center;margin:.5rem 0;font-size:11px;color:#94a3b8;background:rgba(255,255,255,.7);display:inline-block;padding:2px 10px;border-radius:99px;margin:0 auto .5rem;display:block}
+.send-btn:disabled{background:#94a3b8;cursor:not-allowed}
+.attach-btn{width:34px;height:34px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px}
+.typing{font-size:11px;color:#94a3b8;padding:.25rem .875rem;font-style:italic;display:none}
+.no-chat{display:none}
+.empty-state{text-align:center;padding:2rem 1rem;color:#94a3b8;font-size:12px}
 </style></head><body>
 
 <div class="contacts">
-  <div class="contacts-h">💬 Conversaciones</div>
-  <div class="search"><input id="searchC" placeholder="Buscar contacto..." oninput="filterContacts()"></div>
+  <div class="contacts-h">
+    💬 Conversaciones
+    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94a3b8;font-weight:400">
+      <div class="wa-dot" id="waDot"></div>
+      <span id="waLabel">WA</span>
+    </div>
+  </div>
+  <div class="search"><input id="searchC" placeholder="🔍 Buscar contacto..." oninput="filterContacts()"></div>
   <div class="contact-list" id="contactList">
-    <div style="text-align:center;padding:2rem;color:#94a3b8;font-size:12px">Cargando...</div>
+    <div class="empty-state">Cargando conversaciones...</div>
   </div>
 </div>
 
 <div class="chat-area">
-  <div id="chatHeader" style="display:none" class="chat-header">
-    <div class="avatar" id="hAvatar">?</div>
-    <div><div class="ch-name" id="hName">—</div><div class="ch-sub" id="hSub">—</div></div>
-    <div style="margin-left:auto;display:flex;gap:6px">
-      <button onclick="agendarDemo()" style="height:28px;padding:0 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer;background:#fff">📅 Agendar demo</button>
+  <div class="empty-chat" id="emptyChat">
+    <div>
+      <div style="font-size:48px;margin-bottom:.75rem">💬</div>
+      <p style="font-size:14px;font-weight:500;color:#374151">Selecciona una conversación</p>
+      <p style="font-size:12px;margin-top:4px">Los mensajes entrantes aparecen automáticamente</p>
     </div>
   </div>
 
-  <div id="emptyChat" class="empty-chat">
-    <div><div style="font-size:40px;margin-bottom:.5rem">💬</div><p style="font-size:14px;font-weight:500;color:#374151">Selecciona una conversación</p><p style="font-size:12px;color:#94a3b8;margin-top:4px">O busca un contacto para enviarle un mensaje</p></div>
-  </div>
-
-  <div id="msgsArea" style="display:none;flex:1;overflow-y:auto;flex-direction:column" class="msgs" id="msgs"></div>
-
-  <div id="inputArea" style="display:none" class="chat-input">
-    <button class="img-btn" onclick="document.getElementById('imgChat').click()" title="Enviar imagen">📎</button>
-    <input type="file" id="imgChat" accept="image/*" style="display:none" onchange="enviarConImagen(this.files[0])">
-    <textarea id="msgInput" placeholder="Escribe un mensaje..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviar()}" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
-    <button class="send-btn" onclick="enviar()">➤</button>
+  <div id="chatPanel" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+    <div class="chat-header">
+      <div class="avatar" id="hAvatar">?</div>
+      <div style="flex:1;min-width:0">
+        <div class="ch-name" id="hName">—</div>
+        <div class="ch-sub" id="hSub">—</div>
+      </div>
+      <button onclick="agendarDemo()" style="height:26px;padding:0 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer;background:#fff;flex-shrink:0">📅 Demo</button>
+    </div>
+    <div class="msgs" id="msgsArea"></div>
+    <div class="typing" id="typing">Escribiendo...</div>
+    <div class="chat-input">
+      <button class="attach-btn" onclick="document.getElementById('imgChat').click()" title="Adjuntar imagen">📎</button>
+      <input type="file" id="imgChat" accept="image/*" style="display:none" onchange="enviarImagen(this.files[0])">
+      <textarea id="msgInput" placeholder="Escribe un mensaje..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviar()}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="enviar()">➤</button>
+    </div>
   </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket=io();
-let activoId=null, activoData=null, todos=[];
+let activoId = null, activoData = null, todos = [], pollingTimer = null;
 
-socket.on('wa:mensaje_entrante',({negocioId})=>{
-  if(negocioId===activoId) loadMsgs(activoId);
-  loadContacts();
+// ── Socket.io — conexión propia del iframe ───────────────────────────────────
+const socket = io(window.location.origin);
+
+socket.on('connect', () => console.log('Chat socket conectado'));
+
+socket.on('wa:status', ({ status }) => {
+  const dot = document.getElementById('waDot');
+  const lbl = document.getElementById('waLabel');
+  dot.className = 'wa-dot' + (status === 'conectado' ? ' on' : status === 'conectando' || status === 'qr' ? ' pulse' : '');
+  lbl.textContent = status === 'conectado' ? 'Conectado' : status === 'qr' ? 'Escanea QR' : status === 'conectando' ? 'Conectando...' : 'Desconectado';
 });
 
-async function loadContacts(){
-  const data=await fetch('/api/chat').then(r=>r.json()).catch(()=>({rows:[]}));
-  todos=data.rows||[];
+// ── EVENTO CLAVE: mensaje entrante en tiempo real ────────────────────────────
+socket.on('wa:mensaje_entrante', ({ numero, texto, negocioId, ts }) => {
+  // Refrescar lista de contactos siempre
+  loadContacts();
+
+  // Si la conversación activa es la del remitente → agregar burbuja al instante
+  if (negocioId && negocioId === activoId) {
+    appendBubble({ direccion: 'entrante', contenido: texto, created_at: ts || new Date(), nuevo: true });
+  }
+});
+
+// ── Carga de contactos ───────────────────────────────────────────────────────
+async function loadContacts() {
+  const data = await fetch('/api/chat').then(r => r.json()).catch(() => ({ rows: [] }));
+  todos = data.rows || [];
   renderContacts(todos);
 }
 
-function filterContacts(){
-  const q=document.getElementById('searchC').value.toLowerCase();
-  renderContacts(todos.filter(r=>r.nombre.toLowerCase().includes(q)||(r.telefono||'').includes(q)));
+function filterContacts() {
+  const q = document.getElementById('searchC').value.toLowerCase();
+  renderContacts(q ? todos.filter(r => r.nombre.toLowerCase().includes(q) || (r.telefono || '').includes(q)) : todos);
 }
 
-function renderContacts(rows){
-  const el=document.getElementById('contactList');
-  if(!rows.length){ el.innerHTML='<div style="text-align:center;padding:2rem;color:#94a3b8;font-size:12px">Sin conversaciones aún.<br>Los mensajes enviados aparecerán aquí.</div>'; return; }
-  el.innerHTML=rows.map(r=>`
-    <div class="contact-item ${activoId===r.id?'active':''}" onclick="openChat(${r.id},'${esc(r.nombre)}','${esc(r.telefono||'')}','${esc(r.distrito||'')}')">
-      <div class="avatar">${r.nombre.charAt(0).toUpperCase()}</div>
+function renderContacts(rows) {
+  const el = document.getElementById('contactList');
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state">Sin conversaciones aún.<br>Envía mensajes para verlos aquí.</div>';
+    return;
+  }
+  el.innerHTML = rows.map(r => `
+    <div class="contact-item ${activoId === r.id ? 'active' : ''}" onclick="openChat(${r.id},'${esc(r.nombre)}','${esc(r.telefono||'')}','${esc(r.distrito||'')}')">
+      <div class="avatar ${r.no_leidos > 0 ? 'new' : ''}">${r.nombre.charAt(0).toUpperCase()}</div>
       <div class="ci-info">
         <div class="ci-name">${r.nombre}</div>
-        <div class="ci-last">${r.ultimo_texto||'Sin mensajes'}</div>
+        <div class="ci-last">${esc(r.ultimo_texto || 'Sin mensajes')}</div>
       </div>
-      ${r.no_leidos>0?`<span class="ci-badge">${r.no_leidos}</span>`:''}
+      <div class="ci-meta">
+        <span class="ci-time">${r.ultimo_msg ? fmtTime(r.ultimo_msg) : ''}</span>
+        ${r.no_leidos > 0 ? `<span class="ci-badge">${r.no_leidos}</span>` : ''}
+      </div>
     </div>`).join('');
 }
 
-async function openChat(id, nombre, tel, dist){
-  activoId=id;
-  activoData={id,nombre,tel,dist};
-  document.getElementById('emptyChat').style.display='none';
-  document.getElementById('chatHeader').style.display='flex';
-  document.getElementById('msgsArea').style.display='flex';
-  document.getElementById('inputArea').style.display='flex';
-  document.getElementById('hAvatar').textContent=nombre.charAt(0).toUpperCase();
-  document.getElementById('hName').textContent=nombre;
-  document.getElementById('hSub').textContent=[tel,dist].filter(Boolean).join(' · ');
-  document.querySelectorAll('.contact-item').forEach(el=>el.classList.remove('active'));
+// ── Abrir conversación ───────────────────────────────────────────────────────
+async function openChat(id, nombre, tel, dist) {
+  activoId = id;
+  activoData = { id, nombre, tel, dist };
+
+  document.getElementById('emptyChat').style.display = 'none';
+  document.getElementById('chatPanel').style.display = 'flex';
+  document.getElementById('hAvatar').textContent = nombre.charAt(0).toUpperCase();
+  document.getElementById('hName').textContent = nombre;
+  document.getElementById('hSub').textContent = [tel, dist].filter(Boolean).join(' · ');
+
+  // Verificar si tiene número WA registrado
+  checkNumeroWA(id, nombre);
+
+  // Marcar activo en lista
+  document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('active'));
   event?.currentTarget?.classList?.add('active');
+
   await loadMsgs(id);
+  startPolling(id);
 }
 
-async function loadMsgs(id){
-  const data=await fetch(`/api/chat/${id}`).then(r=>r.json()).catch(()=>({msgs:[]}));
-  const msgs=data.msgs||[];
-  const area=document.getElementById('msgsArea');
-  area.innerHTML='';
-  let lastDate='';
-  msgs.forEach(m=>{
-    const d=new Date(m.created_at).toLocaleDateString('es-PE');
-    if(d!==lastDate){ lastDate=d; area.innerHTML+=`<div class="date-sep">${d}</div>`; }
-    const isOut=m.direccion==='saliente';
-    area.innerHTML+=`<div class="msg-wrap ${isOut?'out':''}">
-      <div class="bubble ${isOut?'out':'in'}">
-        ${m.media_url?`<img src="${m.media_url}" class="bubble-media">`:''}
-        <div style="white-space:pre-wrap;word-break:break-word">${esc(m.contenido||'')}</div>
-        <div class="bubble-time">${new Date(m.created_at).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})}${isOut?' ✓✓':''}</div>
-      </div>
-    </div>`;
-  });
-  area.scrollTop=area.scrollHeight;
+// ── Cargar mensajes ──────────────────────────────────────────────────────────
+async function loadMsgs(id, soloNuevos = false) {
+  const data = await fetch(`/api/chat/${id}`).then(r => r.json()).catch(() => ({ msgs: [] }));
+  const msgs = data.msgs || [];
+
+  if (!soloNuevos) {
+    // Render completo
+    const area = document.getElementById('msgsArea');
+    area.innerHTML = '';
+    let lastDate = '';
+    msgs.forEach(m => {
+      const d = new Date(m.created_at).toLocaleDateString('es-PE');
+      if (d !== lastDate) { lastDate = d; area.innerHTML += `<div class="date-sep">${d}</div>`; }
+      area.innerHTML += buildBubble(m, false);
+    });
+    area.scrollTop = area.scrollHeight;
+  }
+
+  // Actualizar contador de no leídos en lista
   loadContacts();
 }
 
-async function enviar(){
-  const txt=document.getElementById('msgInput').value.trim();
-  if(!txt||!activoId)return;
-  document.getElementById('msgInput').value='';
-  document.getElementById('msgInput').style.height='auto';
-  await fetch(`/api/chat/${activoId}/enviar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:txt})});
-  loadMsgs(activoId);
+function buildBubble(m, nuevo = false) {
+  const isOut = m.direccion === 'saliente';
+  const hora = new Date(m.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  return `<div class="msg-wrap ${isOut ? 'out' : ''}">
+    <div class="bubble ${isOut ? 'out' : 'in'}${nuevo ? ' nuevo' : ''}">
+      ${m.media_url ? `<img src="${m.media_url}" class="bubble-media">` : ''}
+      <div class="bubble-text">${esc(m.contenido || '')}</div>
+      <div class="bubble-time">${hora}${isOut ? ' ✓✓' : ''}</div>
+    </div>
+  </div>`;
 }
 
-async function enviarConImagen(file){
-  if(!file||!activoId)return;
-  const fd=new FormData(); fd.append('imagen',file);
-  // primero subir la imagen
-  const r=await fetch(`/api/chat/${activoId}/enviar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:''})});
-  loadMsgs(activoId);
+function appendBubble(m) {
+  const area = document.getElementById('msgsArea');
+  if (!area) return;
+  const isBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+  area.innerHTML += buildBubble(m, true);
+  if (isBottom) area.scrollTop = area.scrollHeight;
 }
 
-async function agendarDemo(){
-  if(!activoData)return;
-  const fecha=prompt('Fecha y hora (ej: 2025-02-15T10:00):');
-  if(!fecha)return;
-  const tipo=prompt('Tipo (virtual/presencial/telefonica):')||'virtual';
-  const enlace=prompt('Enlace Zoom/Meet (opcional):')||'';
-  await fetch('/api/demos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({negocio_id:activoData.id,titulo:'Demo',fecha_hora:fecha,tipo,enlace})});
-  alert('✅ Demo agendada. Recibirá recordatorio automático por WhatsApp.');
+// ── Polling de respaldo cada 8 segundos ─────────────────────────────────────
+function startPolling(id) {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(async () => {
+    if (activoId !== id) { clearInterval(pollingTimer); return; }
+    // Refrescar mensajes silenciosamente
+    const data = await fetch(`/api/chat/${id}`).then(r => r.json()).catch(() => ({ msgs: [] }));
+    const msgs = data.msgs || [];
+    const area = document.getElementById('msgsArea');
+    if (!area) return;
+    // Contar burbujas actuales
+    const currentCount = area.querySelectorAll('.msg-wrap').length;
+    if (msgs.length > currentCount) {
+      // Hay mensajes nuevos — re-render completo
+      let lastDate = '';
+      area.innerHTML = '';
+      msgs.forEach(m => {
+        const d = new Date(m.created_at).toLocaleDateString('es-PE');
+        if (d !== lastDate) { lastDate = d; area.innerHTML += `<div class="date-sep">${d}</div>`; }
+        area.innerHTML += buildBubble(m, false);
+      });
+      area.scrollTop = area.scrollHeight;
+      loadContacts();
+    }
+  }, 8000);
 }
 
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// ── Enviar mensaje ───────────────────────────────────────────────────────────
+async function enviar() {
+  const txt = document.getElementById('msgInput').value.trim();
+  if (!txt || !activoId) return;
 
+  const btn = document.getElementById('sendBtn');
+  const input = document.getElementById('msgInput');
+  btn.disabled = true;
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Burbuja optimista
+  appendBubble({ direccion: 'saliente', contenido: txt, created_at: new Date(), nuevo: true });
+
+  try {
+    const resp = await fetch('/api/chat/' + activoId + '/enviar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: txt })
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      showError('No se pudo enviar: ' + (data.error || 'Error desconocido'));
+    }
+  } catch (e) {
+    showError('Error de red: ' + e.message);
+  }
+
+  btn.disabled = false;
+  input.focus();
+}
+
+async function checkNumeroWA(id, nombre) {
+  // Traer datos del negocio para ver si tiene WA
+  const data = await fetch('/api/negocios?q=' + encodeURIComponent(nombre) + '&limit=5').then(r=>r.json()).catch(()=>({rows:[]}));
+  const neg = (data.rows||[]).find(r=>r.id===id);
+  const tieneWA = neg && (neg.whatsapp || neg.telefono_int || neg.telefono);
+
+  const area = document.getElementById('msgsArea');
+  // Quitar aviso anterior si existe
+  const prevWarn = document.getElementById('wa-warn');
+  if (prevWarn) prevWarn.remove();
+
+  if (!tieneWA) {
+    const div = document.createElement('div');
+    div.id = 'wa-warn';
+    div.style.cssText = 'text-align:center;padding:.75rem;margin:.5rem 0';
+    div.innerHTML = `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:.75rem 1rem;font-size:12px;color:#92400e">
+      ⚠️ Este contacto no tiene número de WhatsApp registrado.<br>
+      <input id="waNumInput" placeholder="Ingresa número WA (ej: 51987654321)" style="margin-top:6px;width:200px;height:28px;border:1px solid #fde68a;border-radius:6px;padding:0 8px;font-size:12px;text-align:center">
+      <button onclick="guardarNumeroWA()" style="margin-left:4px;height:28px;padding:0 10px;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer">Guardar</button>
+    </div>`;
+    area.prepend(div);
+  }
+}
+
+async function guardarNumeroWA(id) {
+  const num = document.getElementById('waNumInput')?.value.trim();
+  if (!num) return alert('Ingresa un número');
+  await fetch('/api/negocios/' + id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ whatsapp: num })
+  });
+  document.getElementById('wa-warn')?.remove();
+  alert('✅ Número guardado. Ahora puedes enviar mensajes.');
+}
+
+function showError(msg) {
+  // Mostrar error inline en el chat
+  const area = document.getElementById('msgsArea');
+  const div = document.createElement('div');
+  div.style.cssText = 'text-align:center;padding:4px;margin:4px 0';
+  div.innerHTML = '<span style="background:#fef2f2;color:#dc2626;font-size:11px;padding:3px 10px;border-radius:99px;border:1px solid #fecaca">' + msg + '</span>';
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  setTimeout(() => div.remove(), 5000);
+}
+
+async function enviarImagen(file) {
+  if (!file || !activoId) return;
+  const formData = new FormData();
+  formData.append('imagen', file);
+  // Por ahora enviar texto vacío con la ruta de imagen
+  alert('Función de imagen en desarrollo. Por ahora usa el mensaje de texto.');
+}
+
+async function agendarDemo() {
+  if (!activoData) return;
+  const fecha = prompt(`Demo para "${activoData.nombre}"\nFecha y hora (ej: 2026-08-20T10:00):`);
+  if (!fecha) return;
+  const enlace = prompt('Enlace Zoom/Meet (opcional):') || '';
+  const r = await fetch('/api/demos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ negocio_id: activoData.id, titulo: 'Demo', fecha_hora: fecha, tipo: 'virtual', enlace })
+  });
+  const d = await r.json();
+  if (d.ok) alert('✅ Demo agendada. Se enviará recordatorio automático por WhatsApp 24h y 1h antes.');
+  else alert('Error: ' + d.error);
+}
+
+// ── Utilidades ───────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const hoy = new Date();
+  if (d.toDateString() === hoy.toDateString())
+    return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
 loadContacts();
+// Refrescar lista cada 15 segundos como respaldo extra
+setInterval(loadContacts, 15000);
 </script></body></html>
