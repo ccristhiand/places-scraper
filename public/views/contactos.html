@@ -1,0 +1,248 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;padding:1.25rem;display:flex;gap:1rem;height:100vh;overflow:hidden}
+.left{flex:1;display:flex;flex-direction:column;gap:1rem;overflow:hidden;min-width:0}
+.right{width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:1rem;overflow-y:auto}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden}
+.card-h{padding:.75rem 1.25rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
+.card-h h3{font-size:13px;font-weight:600}
+.card-b{padding:1rem}
+.filters{display:flex;gap:8px;flex-wrap:wrap;padding:.75rem 1.25rem;border-bottom:1px solid #f0f0f0;align-items:center}
+.f-inp{height:32px;padding:0 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px}
+.f-inp:focus{outline:none;border-color:#3b82f6}
+select.f-inp{min-width:120px}
+.btn{height:30px;padding:0 12px;border-radius:7px;font-size:12px;font-weight:500;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.btn-primary{background:#2563eb;color:#fff}.btn-outline{background:#fff;border:1px solid #e2e8f0;color:#374151}
+.btn-sm{height:26px;padding:0 8px;font-size:11px}
+.btn-red{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.btn-green{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+.btn-blue{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f8fafc;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e2e8f0;white-space:nowrap;cursor:pointer}
+th:hover{color:#1e293b}
+td{padding:8px 10px;border-bottom:1px solid #f8fafc;vertical-align:middle;color:#374151}
+tr:hover td{background:#f8fafc}
+tr.selected td{background:#eff6ff}
+.badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.b-nuevo{background:#dbeafe;color:#1d4ed8}.b-contactado{background:#fef9c3;color:#854d0e}
+.b-interesado{background:#ffedd5;color:#9a3412}.b-propuesta{background:#f3e8ff;color:#7e22ce}
+.b-cerrado{background:#dcfce7;color:#15803d}.b-descartado{background:#fee2e2;color:#991b1b}
+.phone{font-family:monospace;font-size:11px;color:#2563eb}
+.scroll{overflow-y:auto;flex:1}
+.hist-item{padding:.625rem 0;border-bottom:1px solid #f0f0f0;display:flex;gap:8px}
+.hist-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.hist-body{flex:1;min-width:0}
+.hist-type{font-size:11px;font-weight:600;color:#374151}
+.hist-txt{font-size:12px;color:#64748b;margin-top:2px;word-break:break-word}
+.hist-ts{font-size:10px;color:#94a3b8;margin-top:2px}
+.empty{text-align:center;padding:2rem;color:#94a3b8;font-size:13px}
+textarea{width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-size:12px;resize:none;height:70px;font-family:inherit}
+textarea:focus{outline:none;border-color:#3b82f6}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;margin-right:3px}
+</style></head><body>
+
+<div class="left">
+  <div class="card" style="flex-shrink:0">
+    <div class="filters">
+      <input class="f-inp" id="fQ" placeholder="🔍 Buscar nombre o teléfono..." oninput="load()" style="min-width:200px">
+      <select class="f-inp" id="fDep" onchange="load()"><option value="">Todos los dep.</option></select>
+      <select class="f-inp" id="fEstado" onchange="load()">
+        <option value="">Todos los estados</option>
+        <option value="nuevo">Nuevo</option><option value="contactado">Contactado</option>
+        <option value="interesado">Interesado</option><option value="propuesta">Propuesta</option>
+        <option value="cerrado">Cerrado</option><option value="descartado">Descartado</option>
+      </select>
+      <select class="f-inp" id="fRubro" onchange="load()"><option value="">Todos los rubros</option></select>
+      <span id="total" style="font-size:12px;color:#64748b;margin-left:auto"></span>
+    </div>
+  </div>
+
+  <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>Nombre</th><th>Teléfono</th><th>WA</th><th>Website</th>
+          <th>Ubicación</th><th>Estado CRM</th><th>Rubro</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty" style="display:none">Sin contactos guardados. Busca negocios y guárdalos primero.</div>
+    </div>
+  </div>
+</div>
+
+<div class="right">
+  <div class="card" id="panelVacio">
+    <div class="card-b" style="text-align:center;padding:2rem">
+      <div style="font-size:32px;margin-bottom:.5rem">👆</div>
+      <p style="font-size:13px;color:#64748b">Clic en un contacto para ver su historial y gestionar el CRM</p>
+    </div>
+  </div>
+
+  <div id="panelDetalle" style="display:none">
+    <div class="card">
+      <div class="card-h"><h3 id="detNombre">—</h3></div>
+      <div class="card-b" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;color:#64748b" id="detInfo"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select id="detEstado" style="flex:1;height:28px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;padding:0 6px" onchange="cambiarEstado()">
+            <option value="nuevo">🆕 Nuevo</option><option value="contactado">📞 Contactado</option>
+            <option value="interesado">⭐ Interesado</option><option value="propuesta">📄 Propuesta</option>
+            <option value="cerrado">✅ Cerrado</option><option value="descartado">❌ Descartado</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="openDemo()">📅 Demo</button>
+          <button class="btn btn-blue btn-sm" onclick="irChat()">💬 Chat</button>
+        </div>
+        <div>
+          <input id="detWA" placeholder="Número WhatsApp (51XXXXXXXXX)" style="width:100%;height:28px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;padding:0 8px">
+          <button onclick="guardarWA()" style="margin-top:4px;width:100%;height:26px;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;border-radius:6px;font-size:11px;cursor:pointer">Guardar número WA</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>📝 Agregar nota</h3></div>
+      <div class="card-b">
+        <select id="tipoNota" style="width:100%;height:28px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;padding:0 6px;margin-bottom:6px">
+          <option value="comentario">💬 Comentario</option>
+          <option value="llamada">📞 Llamada</option>
+          <option value="mensaje">📤 Mensaje</option>
+        </select>
+        <textarea id="notaTxt" placeholder="Escribe tu nota aquí..."></textarea>
+        <button onclick="addNota()" style="margin-top:6px;width:100%;height:28px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Guardar nota</button>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div class="card-h"><h3>📋 Historial</h3></div>
+      <div id="historial" style="padding:.5rem 1rem;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Mini modal demo -->
+<div id="demoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:380px;overflow:hidden">
+    <div style="padding:.875rem 1.25rem;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px">📅 Agendar demo</div>
+    <div style="padding:1rem;display:flex;flex-direction:column;gap:8px">
+      <input id="dTitulo" placeholder="Título de la demo" style="height:34px;border:1px solid #e2e8f0;border-radius:7px;padding:0 10px;font-size:13px">
+      <input id="dFecha" type="datetime-local" style="height:34px;border:1px solid #e2e8f0;border-radius:7px;padding:0 10px;font-size:13px">
+      <select id="dTipo" style="height:34px;border:1px solid #e2e8f0;border-radius:7px;padding:0 10px;font-size:13px">
+        <option value="virtual">🖥️ Virtual</option><option value="presencial">🏢 Presencial</option><option value="telefonica">📞 Telefónica</option>
+      </select>
+      <input id="dEnlace" placeholder="Enlace (Zoom, Meet, Teams...)" style="height:34px;border:1px solid #e2e8f0;border-radius:7px;padding:0 10px;font-size:13px">
+      <input id="dResp" placeholder="Responsable" style="height:34px;border:1px solid #e2e8f0;border-radius:7px;padding:0 10px;font-size:13px">
+      <textarea id="dNotas" placeholder="Notas adicionales..." style="height:60px;border:1px solid #e2e8f0;border-radius:7px;padding:8px 10px;font-size:13px;resize:none"></textarea>
+    </div>
+    <div style="padding:.75rem 1.25rem;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="document.getElementById('demoModal').style.display='none'" style="height:30px;padding:0 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;background:#fff">Cancelar</button>
+      <button onclick="guardarDemo()" style="height:30px;padding:0 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Agendar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let activo=null;
+const CRM_C={nuevo:'b-nuevo',contactado:'b-contactado',interesado:'b-interesado',propuesta:'b-propuesta',cerrado:'b-cerrado',descartado:'b-descartado'};
+const CRM_L={nuevo:'🆕 Nuevo',contactado:'📞 Contactado',interesado:'⭐ Interesado',propuesta:'📄 Propuesta',cerrado:'✅ Cerrado',descartado:'❌ Descartado'};
+const HIST_I={estado:'🔄',comentario:'💬',llamada:'📞',demo:'📅',mensaje:'📤'};
+const HIST_C={estado:'#dbeafe',comentario:'#f1f5f9',llamada:'#fef9c3',demo:'#f3e8ff',mensaje:'#dcfce7'};
+
+async function load(){
+  const q=document.getElementById('fQ').value, dep=document.getElementById('fDep').value, estado=document.getElementById('fEstado').value, rubro=document.getElementById('fRubro').value;
+  let url=`/api/negocios?limit=300${q?'&q='+encodeURIComponent(q):''}${dep?'&dep='+encodeURIComponent(dep):''}${estado?'&estado_crm='+estado:''}${rubro?'&rubro='+encodeURIComponent(rubro):''}`;
+  const data=await fetch(url).then(r=>r.json()).catch(()=>({rows:[]}));
+  const rows=data.rows||[];
+  document.getElementById('total').textContent=`${rows.length} contactos`;
+  document.getElementById('empty').style.display=rows.length?'none':'block';
+  document.getElementById('tbody').innerHTML=rows.map(r=>`<tr onclick="selRow(this,${JSON.stringify(r).replace(/"/g,'&quot;')})" ${activo?.id===r.id?'class="selected"':''}>
+    <td><b>${r.nombre}</b></td>
+    <td>${r.telefono?`<span class="phone">${r.telefono}</span>`:'—'}</td>
+    <td style="font-size:11px">${r.whatsapp||'<span style="color:#cbd5e1">—</span>'}</td>
+    <td>${r.website?`<a href="${r.website}" target="_blank" style="font-size:11px;color:#2563eb">↗ web</a>`:'—'}</td>
+    <td style="font-size:11px;color:#64748b">${[r.distrito,r.provincia].filter(Boolean).join(', ')||'—'}</td>
+    <td><span class="badge ${CRM_C[r.estado_crm]||'b-nuevo'}">${CRM_L[r.estado_crm]||r.estado_crm}</span></td>
+    <td style="font-size:11px;color:#64748b">${r.rubro_busqueda||'—'}</td>
+    <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();selRow(this.closest('tr'),${JSON.stringify(r).replace(/"/g,'&quot;')})">Ver</button></td>
+  </tr>`).join('');
+}
+
+function selRow(tr, r){
+  document.querySelectorAll('tr.selected').forEach(t=>t.classList.remove('selected'));
+  tr.classList.add('selected');
+  activo=r;
+  document.getElementById('panelVacio').style.display='none';
+  document.getElementById('panelDetalle').style.display='';
+  document.getElementById('detNombre').textContent=r.nombre;
+  document.getElementById('detInfo').innerHTML=`📞 ${r.telefono||'—'} &nbsp;|&nbsp; 📍 ${[r.distrito,r.provincia,r.departamento].filter(Boolean).join(', ')||'—'}<br>🏷️ ${r.rubro_busqueda||'—'} &nbsp;|&nbsp; ⭐ ${r.rating||'—'}`;
+  document.getElementById('detEstado').value=r.estado_crm||'nuevo';
+  document.getElementById('detWA').value=r.whatsapp||'';
+  loadHistorial(r.id);
+}
+
+async function loadHistorial(id){
+  const data=await fetch(`/api/crm/${id}`).then(r=>r.json()).catch(()=>({historial:[]}));
+  const items=data.historial||[];
+  document.getElementById('historial').innerHTML=items.length?items.map(h=>`
+    <div class="hist-item">
+      <div class="hist-icon" style="background:${HIST_C[h.tipo]||'#f1f5f9'}">${HIST_I[h.tipo]||'📌'}</div>
+      <div class="hist-body">
+        <div class="hist-type">${h.tipo.charAt(0).toUpperCase()+h.tipo.slice(1)}${h.usuario?` · ${h.usuario}`:''}</div>
+        <div class="hist-txt">${h.contenido||''}</div>
+        <div class="hist-ts">${new Date(h.created_at).toLocaleString('es-PE')}</div>
+      </div>
+    </div>`).join(''):'<div class="empty">Sin historial aún</div>';
+}
+
+async function cambiarEstado(){
+  if(!activo)return;
+  const estado=document.getElementById('detEstado').value;
+  await fetch(`/api/negocios/${activo.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado_crm:estado})});
+  activo.estado_crm=estado;
+  load(); loadHistorial(activo.id);
+}
+
+async function guardarWA(){
+  if(!activo)return;
+  const wa=document.getElementById('detWA').value.trim();
+  await fetch(`/api/negocios/${activo.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({whatsapp:wa})});
+  activo.whatsapp=wa; alert('✅ Número WA guardado');
+}
+
+async function addNota(){
+  if(!activo)return;
+  const txt=document.getElementById('notaTxt').value.trim(), tipo=document.getElementById('tipoNota').value;
+  if(!txt)return alert('Escribe una nota');
+  await fetch(`/api/crm/${activo.id}/comentario`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contenido:txt,tipo})});
+  document.getElementById('notaTxt').value='';
+  loadHistorial(activo.id);
+}
+
+function openDemo(){ if(!activo)return; document.getElementById('demoModal').style.display='flex'; }
+async function guardarDemo(){
+  if(!activo)return;
+  const body={negocio_id:activo.id,titulo:document.getElementById('dTitulo').value,fecha_hora:document.getElementById('dFecha').value,tipo:document.getElementById('dTipo').value,enlace:document.getElementById('dEnlace').value,responsable:document.getElementById('dResp').value,notas:document.getElementById('dNotas').value};
+  if(!body.fecha_hora)return alert('Selecciona fecha y hora');
+  await fetch('/api/demos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  document.getElementById('demoModal').style.display='none';
+  loadHistorial(activo.id);
+  alert('✅ Demo agendada con recordatorios automáticos');
+}
+
+function irChat(){
+  if(!activo)return;
+  window.parent.postMessage({nav:'chat',id:activo.id},'*');
+}
+
+async function initFiltros(){
+  const deps=await fetch('/api/ubigeo/departamentos').then(r=>r.json());
+  const s=document.getElementById('fDep');
+  deps.forEach(d=>s.innerHTML+=`<option value="${d}">${d}</option>`);
+  const data=await fetch('/api/negocios?limit=500').then(r=>r.json()).catch(()=>({rows:[]}));
+  const rubros=[...new Set((data.rows||[]).map(r=>r.rubro_busqueda).filter(Boolean))];
+  const sr=document.getElementById('fRubro');
+  rubros.forEach(r=>sr.innerHTML+=`<option value="${r}">${r}</option>`);
+}
+
+initFiltros(); load();
+</script></body></html>

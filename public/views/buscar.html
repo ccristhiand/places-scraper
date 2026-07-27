@@ -1,0 +1,214 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;padding:1.25rem}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:1rem}
+.card-h{padding:.875rem 1.25rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-h h2{font-size:14px;font-weight:600}
+.card-b{padding:1.25rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+.f{display:flex;flex-direction:column;gap:4px}
+.f label{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+.f input,.f select{height:36px;padding:0 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;color:#1e293b}
+.f input:focus,.f select:focus{outline:none;border-color:#3b82f6}
+.btn{height:36px;padding:0 16px;border-radius:8px;font-size:13px;font-weight:500;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}.btn-primary:disabled{background:#93c5fd;cursor:not-allowed}
+.btn-success{background:#16a34a;color:#fff}.btn-success:hover{background:#15803d}.btn-success:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{background:#fff;color:#374151;border:1px solid #e2e8f0}.btn-outline:hover{background:#f8fafc}
+.btn-sm{height:28px;padding:0 10px;font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:1rem}
+.stat{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:.75rem 1rem}
+.stat-n{font-size:20px;font-weight:700;color:#1e293b}.stat-l{font-size:11px;color:#94a3b8;margin-top:2px}
+.progress{display:none;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;margin-bottom:1rem}
+.bar{height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin-bottom:6px}
+.bar-f{height:100%;background:#2563eb;width:0%;transition:width .4s;border-radius:3px}
+.bar-info{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8}
+.alert{padding:.75rem 1rem;border-radius:8px;font-size:13px;margin-bottom:1rem;display:none}
+.a-ok{background:#f0fdf4;border-left:3px solid #22c55e;color:#15803d}
+.a-err{background:#fef2f2;border-left:3px solid #ef4444;color:#991b1b}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.fb{height:26px;padding:0 10px;font-size:11px;border:1px solid #e2e8f0;border-radius:5px;background:#fff;cursor:pointer;color:#64748b}
+.fb.on{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+tr:hover td{background:#fafafa}
+.badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.b-g{background:#dcfce7;color:#15803d}.b-gr{background:#f1f5f9;color:#64748b}
+.phone{font-family:monospace;font-size:11px;color:#2563eb}
+input[type=checkbox]{accent-color:#2563eb;cursor:pointer}
+.saved{background:#dcfce7;color:#15803d;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px}
+</style></head><body>
+
+<div class="card">
+  <div class="card-h"><h2>🔍 Nueva búsqueda</h2></div>
+  <div class="card-b">
+    <div class="grid">
+      <div class="f" style="min-width:180px"><label>¿Qué buscas?</label><input id="q" placeholder="veterinaria, clínica, gimnasio..."></div>
+      <div class="f"><label>Departamento</label><select id="dep" onchange="loadProv()"><option value="">— Selecciona —</option></select></div>
+      <div class="f"><label>Provincia</label><select id="prov" onchange="loadDist()" disabled><option value="">— Primero dep. —</option></select></div>
+      <div class="f"><label>Distrito</label><select id="dist" disabled><option value="">— Todos —</option></select></div>
+      <div><button class="btn btn-primary" id="btnB" onclick="buscar()">🔍 Buscar</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="alert a-err" id="aErr"></div>
+<div class="alert a-ok"  id="aOk"></div>
+
+<div class="progress" id="prog">
+  <div class="bar"><div class="bar-f" id="bFill"></div></div>
+  <div class="bar-info"><span id="bMsg">Iniciando...</span><span id="bCount"></span></div>
+</div>
+
+<div id="resSection" style="display:none">
+  <div class="stats" id="statsGrid"></div>
+  <div class="card">
+    <div class="card-h">
+      <h2 id="resTitle">Resultados</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportJSON()">⬇ JSON</button>
+        <button class="btn btn-success btn-sm" id="btnG" onclick="guardar()">💾 Guardar seleccionados</button>
+      </div>
+    </div>
+    <div style="padding:.625rem 1.25rem;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div class="filters">
+        <button class="fb on" onclick="fil('all',this)">Todos</button>
+        <button class="fb" onclick="fil('phone',this)">Con teléfono</button>
+        <button class="fb" onclick="fil('web',this)">Con web</button>
+        <button class="fb" onclick="fil('high',this)">Rating ≥ 4</button>
+      </div>
+      <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="selAll" onchange="togAll(this.checked)"> Seleccionar todos
+        <strong id="selN" style="color:#2563eb"></strong>
+      </label>
+    </div>
+    <div style="overflow-x:auto">
+      <table><thead><tr>
+        <th><input type="checkbox" id="selAllH" onchange="togAll(this.checked)"></th>
+        <th>#</th><th>Nombre</th><th>Teléfono</th><th>Website</th><th>Dirección</th><th>Rating</th><th>Estado</th><th>Ubicación</th>
+      </tr></thead><tbody id="tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+let todos=[], filtrados=[], sel=new Set(), savedIds=new Set();
+
+async function loadDeps(){
+  const deps=await fetch('/api/ubigeo/departamentos').then(r=>r.json());
+  const s=document.getElementById('dep');
+  deps.forEach(d=>s.innerHTML+=`<option value="${d}">${d}</option>`);
+}
+async function loadProv(){
+  const dep=document.getElementById('dep').value;
+  const sp=document.getElementById('prov'), sd=document.getElementById('dist');
+  sp.innerHTML='<option value="">— Selecciona —</option>'; sd.innerHTML='<option value="">— Todos —</option>';
+  sp.disabled=!dep; sd.disabled=true;
+  if(!dep)return;
+  const provs=await fetch(`/api/ubigeo/provincias/${encodeURIComponent(dep)}`).then(r=>r.json());
+  provs.forEach(p=>sp.innerHTML+=`<option value="${p}">${p}</option>`);
+  sp.disabled=false;
+}
+async function loadDist(){
+  const dep=document.getElementById('dep').value, prov=document.getElementById('prov').value;
+  const sd=document.getElementById('dist');
+  sd.innerHTML='<option value="">— Todos —</option>'; sd.disabled=!prov;
+  if(!prov)return;
+  const dists=await fetch(`/api/ubigeo/distritos/${encodeURIComponent(dep)}/${encodeURIComponent(prov)}`).then(r=>r.json());
+  dists.forEach(d=>sd.innerHTML+=`<option value="${d}">${d}</option>`);
+  sd.disabled=false;
+}
+
+async function buscar(){
+  const q=document.getElementById('q').value.trim();
+  const dep=document.getElementById('dep').value;
+  if(!q) return alert('Ingresa qué deseas buscar');
+  if(!dep) return alert('Selecciona un departamento');
+  document.getElementById('aErr').style.display='none';
+  document.getElementById('aOk').style.display='none';
+  const btn=document.getElementById('btnB'); btn.disabled=true; btn.textContent='⏳ Buscando...';
+  document.getElementById('resSection').style.display='none';
+  document.getElementById('prog').style.display='block';
+  const msgs=['Conectando con Google Maps...','Página 1 de resultados...','Página 2 de resultados...','Página 3 de resultados...','Enriqueciendo detalles...','Finalizando...'];
+  let mi=0;
+  const pit=setInterval(()=>{
+    if(mi<msgs.length){ document.getElementById('bMsg').textContent=msgs[mi]; document.getElementById('bFill').style.width=((mi+1)/msgs.length*85)+'%'; mi++; }
+  },1500);
+  try{
+    const r=await fetch('/api/negocios/buscar',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({busqueda:q,departamento:dep,provincia:document.getElementById('prov').value,distrito:document.getElementById('dist').value})});
+    const data=await r.json(); clearInterval(pit);
+    if(!data.ok) throw new Error(data.error);
+    todos=data.resultados; filtrados=[...todos]; sel.clear();
+    renderTabla(filtrados); renderStats(filtrados);
+    document.getElementById('resTitle').textContent=`${data.total} resultados — "${data.query}"`;
+    document.getElementById('prog').style.display='none';
+    document.getElementById('resSection').style.display='block';
+    showOk(`✅ ${data.total} negocios encontrados`);
+  }catch(e){ clearInterval(pit); document.getElementById('prog').style.display='none'; showErr('❌ '+e.message); }
+  btn.disabled=false; btn.textContent='🔍 Buscar';
+}
+
+function renderTabla(data){
+  document.getElementById('tbody').innerHTML=data.map((d,i)=>`<tr>
+    <td><input type="checkbox" class="ch" data-id="${d.place_id}" ${sel.has(d.place_id)?'checked':''} onchange="togSel(this)"></td>
+    <td style="color:#94a3b8">${i+1}</td>
+    <td><b style="font-size:12px">${d.nombre}</b>${savedIds.has(d.place_id)?'<span class="saved">✓</span>':''}</td>
+    <td>${d.telefono?`<span class="phone">${d.telefono}</span>`:'<span style="color:#cbd5e1">—</span>'}</td>
+    <td>${d.website?`<a href="${d.website}" target="_blank" style="font-size:11px;color:#2563eb">${d.website.replace(/^https?:\/\//,'').split('/')[0]} ↗</a>`:'<span style="color:#cbd5e1">—</span>'}</td>
+    <td style="font-size:11px;color:#64748b;max-width:160px">${d.direccion}</td>
+    <td><span style="color:#f59e0b">${'★'.repeat(Math.floor(d.rating||0))}${'☆'.repeat(5-Math.floor(d.rating||0))}</span><br><span style="font-size:10px;color:#94a3b8">${d.rating||'—'}</span></td>
+    <td><span class="badge ${d.estado==='Activo'?'b-g':'b-gr'}">${d.estado||'—'}</span></td>
+    <td style="font-size:11px;color:#64748b">${[d.distrito,d.provincia].filter(Boolean).join(', ')}</td>
+  </tr>`).join('');
+  updSelN();
+}
+
+function renderStats(data){
+  const ct=data.filter(d=>d.telefono).length, cw=data.filter(d=>d.website).length;
+  const rr=data.filter(d=>d.rating); const pr=rr.length?(rr.reduce((a,d)=>a+d.rating,0)/rr.length).toFixed(1):'—';
+  document.getElementById('statsGrid').innerHTML=`
+    <div class="stat"><div class="stat-n">${data.length}</div><div class="stat-l">encontrados</div></div>
+    <div class="stat"><div class="stat-n">${ct}</div><div class="stat-l">con teléfono</div></div>
+    <div class="stat"><div class="stat-n">${cw}</div><div class="stat-l">con website</div></div>
+    <div class="stat"><div class="stat-n">${pr}</div><div class="stat-l">rating prom.</div></div>`;
+}
+
+function fil(t,btn){ document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
+  const fns={all:()=>true,phone:d=>d.telefono,web:d=>d.website,high:d=>d.rating>=4};
+  filtrados=todos.filter(fns[t]||fns.all); renderTabla(filtrados); }
+
+function togAll(v){ document.querySelectorAll('.ch').forEach(c=>{c.checked=v; v?sel.add(c.dataset.id):sel.delete(c.dataset.id)});
+  document.getElementById('selAll').checked=v; document.getElementById('selAllH').checked=v; updSelN(); }
+function togSel(c){ c.checked?sel.add(c.dataset.id):sel.delete(c.dataset.id); updSelN(); }
+function updSelN(){ const n=sel.size; document.getElementById('selN').textContent=n>0?`${n} seleccionados`:'';
+  document.getElementById('btnG').textContent=n>0?`💾 Guardar ${n} en BD`:'💾 Guardar seleccionados'; }
+
+async function guardar(){
+  if(!sel.size) return alert('Selecciona al menos un registro');
+  const regs=todos.filter(d=>sel.has(d.place_id));
+  const rubro=document.getElementById('q').value.trim();
+  const btn=document.getElementById('btnG'); btn.disabled=true; btn.textContent='⏳ Guardando...';
+  try{
+    const r=await fetch('/api/negocios/guardar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({registros:regs,rubro})});
+    const data=await r.json(); if(!data.ok) throw new Error(data.error);
+    regs.forEach(r=>savedIds.add(r.place_id)); renderTabla(filtrados);
+    showOk(`✅ Guardados: ${data.insertados} nuevos, ${data.duplicados} ya existían`);
+    togAll(false);
+  }catch(e){ showErr('❌ '+e.message); }
+  btn.disabled=false; updSelN();
+}
+
+function exportCSV(){
+  const h=['Nombre','Teléfono','Website','Dirección','Rating','Estado','Departamento','Provincia','Distrito'];
+  const rows=filtrados.map(d=>[d.nombre,d.telefono,d.website,d.direccion,d.rating,d.estado,d.departamento,d.provincia,d.distrito].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  dl('\uFEFF'+[h.join(','),...rows].join('\n'),'text/csv',`busqueda_${Date.now()}.csv`);
+}
+function exportJSON(){ dl(JSON.stringify(filtrados,null,2),'application/json',`busqueda_${Date.now()}.json`); }
+function dl(c,t,n){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:t})); a.download=n; a.click(); }
+function showOk(m){ const el=document.getElementById('aOk'); el.textContent=m; el.style.display='block'; setTimeout(()=>el.style.display='none',5000); }
+function showErr(m){ const el=document.getElementById('aErr'); el.textContent=m; el.style.display='block'; }
+
+loadDeps();
+</script></body></html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📍</text></svg>">
+<title>Embudo de Ventas — Netcodip</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Places CRM</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --nav:#0f172a;--nav2:#1e293b;--accent:#3b82f6;--accent2:#2563eb;
+  --bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;
+  --green:#16a34a;--red:#dc2626;--yellow:#d97706;--purple:#7c3aed;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:220px;background:var(--nav);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-logo{padding:1.25rem 1rem;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo h1{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.3px}
+.sidebar-logo p{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
+.sidebar-nav{flex:1;padding:.5rem 0;overflow-y:auto}
+.nav-group{padding:.5rem 1rem .25rem;font-size:10px;font-weight:600;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.06em}
+.nav-item{display:flex;align-items:center;gap:10px;padding:.6rem 1rem;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:rgba(59,130,246,.2);color:#93c5fd;border-left-color:var(--accent)}
+.nav-item .icon{width:18px;text-align:center;font-size:15px}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;min-width:18px;text-align:center}
+
+/* WA Status */
+.wa-status{padding:.875rem 1rem;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px}
+.wa-dot{width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0}
+.wa-dot.conectado{background:#22c55e}
+.wa-dot.qr{background:#f59e0b;animation:pulse 1s infinite}
+.wa-dot.conectando{background:#f59e0b;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.wa-info{flex:1;min-width:0}
+.wa-label{font-size:12px;color:rgba(255,255,255,.7);font-weight:500}
+.wa-sub{font-size:10px;color:rgba(255,255,255,.35);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wa-btn{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.6);font-size:11px;padding:4px 8px;border-radius:5px;cursor:pointer}
+.wa-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+
+/* Main content */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:12px;min-height:52px}
+.topbar h2{font-size:15px;font-weight:600}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.content{flex:1;overflow-y:auto}
+iframe{width:100%;height:100%;border:none}
+
+/* QR Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.qr-modal{background:#fff;border-radius:16px;padding:2rem;text-align:center;max-width:320px}
+.qr-modal h3{font-size:16px;font-weight:600;margin-bottom:.5rem}
+.qr-modal p{font-size:13px;color:var(--muted);margin-bottom:1.25rem}
+.qr-modal img{width:220px;height:220px;border-radius:8px;border:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <h1>📍 Places CRM</h1>
+    <p>Sistema de ventas — Perú</p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-group">Prospección</div>
+    <div class="nav-item active" onclick="navTo('buscar','🔍 Buscar negocios',this)">
+      <span class="icon">🔍</span> Buscar
+    </div>
+    <div class="nav-item" onclick="navTo('contactos','👥 Contactos',this)">
+      <span class="icon">👥</span> Contactos
+    </div>
+
+    <div class="nav-group">WhatsApp</div>
+    <div class="nav-item" onclick="navTo('campanas','📝 Campañas',this)">
+      <span class="icon">📝</span> Campañas
+    </div>
+    <div class="nav-item" onclick="navTo('envios','📤 Envíos masivos',this)">
+      <span class="icon">📤</span> Envíos
+    </div>
+    <div class="nav-item" onclick="navTo('chat','💬 Chat',this)" id="navChat">
+      <span class="icon">💬</span> Chat <span class="nav-badge" id="badgeChat" style="display:none">0</span>
+    </div>
+
+    <div class="nav-group">CRM</div>
+    <div class="nav-item" onclick="navTo('crm','📊 Embudo de ventas',this)">
+      <span class="icon">📊</span> Embudo CRM
+    </div>
+    <div class="nav-item" onclick="navTo('demos','📅 Demos agendadas',this)">
+      <span class="icon">📅</span> Demos
+    </div>
+  </nav>
+  <div class="wa-status">
+    <div class="wa-dot" id="waDot"></div>
+    <div class="wa-info">
+      <div class="wa-label" id="waLabel">Desconectado</div>
+      <div class="wa-sub" id="waSub">Clic para conectar</div>
+    </div>
+    <button class="wa-btn" id="waBtn" onclick="toggleWA()">Conectar</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <h2 id="topTitle">🔍 Buscar negocios</h2>
+    <div class="topbar-right" id="topbarRight"></div>
+  </div>
+  <div class="content">
+    <iframe id="frame" src="/views/buscar"></iframe>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div class="modal-bg" id="qrModal">
+  <div class="qr-modal">
+    <h3>📱 Conectar WhatsApp</h3>
+    <p>Abre WhatsApp en tu celular → Dispositivos vinculados → Vincular dispositivo</p>
+    <img id="qrImg" src="" alt="QR">
+    <div style="margin-top:1rem">
+      <button onclick="document.getElementById('qrModal').classList.remove('show')" style="background:none;border:1px solid #ddd;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let waStatusActual = 'desconectado';
+
+// Nav
+function navTo(view, title, el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('topTitle').textContent = title;
+  document.getElementById('frame').src = '/views/' + view;
+}
+
+// WhatsApp
+socket.on('wa:status', ({ status, numero }) => {
+  waStatusActual = status;
+  const dot   = document.getElementById('waDot');
+  const label = document.getElementById('waLabel');
+  const sub   = document.getElementById('waSub');
+  const btn   = document.getElementById('waBtn');
+  dot.className = 'wa-dot ' + status;
+  const map = { desconectado:['Desconectado','Clic para conectar','Conectar'], conectando:['Conectando...','Espera...','...'], qr:['Escanea el QR','Abriendo QR...','Ver QR'], conectado:['Conectado','WhatsApp activo','Salir'] };
+  const [l,s,b] = map[status] || map.desconectado;
+  label.textContent = l; sub.textContent = numero ? numero.split('@')[0] : s; btn.textContent = b;
+  if (status === 'conectado') document.getElementById('qrModal').classList.remove('show');
+});
+
+socket.on('wa:qr', ({ qr }) => {
+  document.getElementById('qrImg').src = qr;
+  document.getElementById('qrModal').classList.add('show');
+});
+
+socket.on('wa:mensaje_entrante', ({ negocioId }) => {
+  const badge = document.getElementById('badgeChat');
+  const n = (parseInt(badge.textContent)||0)+1;
+  badge.textContent = n; badge.style.display='';
+});
+
+async function toggleWA() {
+  if (waStatusActual === 'conectado') {
+    if (!confirm('¿Cerrar sesión de WhatsApp?')) return;
+    await fetch('/api/wa/desconectar', { method:'POST' });
+  } else if (waStatusActual === 'qr') {
+    document.getElementById('qrModal').classList.add('show');
+  } else {
+    await fetch('/api/wa/conectar', { method:'POST' });
+  }
+}
+
+// Limpiar badge al entrar al chat
+document.getElementById('navChat').addEventListener('click', () => {
+  document.getElementById('badgeChat').style.display='none';
+});
+
+// Estado inicial
+fetch('/api/wa/status').then(r=>r.json()).then(d => socket.emit('wa:status', d));
+</script>
+</body>
+</html>

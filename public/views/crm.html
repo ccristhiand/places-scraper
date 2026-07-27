@@ -1,0 +1,270 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b;padding:1rem;height:100vh;overflow:hidden;display:flex;flex-direction:column;gap:.75rem}
+.top{display:flex;align-items:center;gap:.625rem;flex-shrink:0;flex-wrap:wrap}
+.top h2{font-size:14px;font-weight:700}
+.f-inp{height:30px;padding:0 8px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;background:#fff}
+.board{display:flex;gap:.75rem;flex:1;overflow-x:auto;overflow-y:hidden;padding-bottom:.5rem;-webkit-overflow-scrolling:touch}
+.col{width:210px;flex-shrink:0;display:flex;flex-direction:column;gap:.375rem}
+.col-header{padding:.5rem .75rem;border-radius:8px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.col-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:.375rem;padding:3px;border-radius:8px;transition:background .15s;min-height:80px}
+.col-body.drag-over{background:rgba(59,130,246,.1);outline:2px dashed #93c5fd}
+.card{background:#fff;border-radius:9px;border:1px solid #e2e8f0;padding:.625rem;cursor:grab;transition:box-shadow .15s;user-select:none;touch-action:none}
+.card:active{cursor:grabbing}
+.card.dragging{opacity:.35;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+.card.touch-clone{position:fixed;pointer-events:none;z-index:999;opacity:.9;box-shadow:0 8px 24px rgba(0,0,0,.2);transform:rotate(2deg);width:200px}
+.card-name{font-size:11px;font-weight:600;line-height:1.3;margin-bottom:2px}
+.card-sub{font-size:10px;color:#64748b}
+.card-phone{font-size:10px;color:#2563eb;font-family:monospace;margin-top:2px}
+.card-tags{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
+.tag{font-size:9px;padding:1px 4px;border-radius:3px;font-weight:600}
+.card-footer{display:flex;gap:3px;margin-top:6px}
+.ca{height:20px;padding:0 6px;font-size:10px;border:1px solid #e2e8f0;border-radius:4px;background:#fff;cursor:pointer;color:#374151}
+.ca:hover{background:#f1f5f9}
+.badge-count{background:rgba(0,0,0,.15);padding:1px 6px;border-radius:99px;font-size:10px}
+.nuevo .col-header{background:#dbeafe;color:#1d4ed8}
+.contactado .col-header{background:#fef9c3;color:#854d0e}
+.interesado .col-header{background:#ffedd5;color:#9a3412}
+.propuesta .col-header{background:#f3e8ff;color:#7e22ce}
+.cerrado .col-header{background:#dcfce7;color:#15803d}
+.descartado .col-header{background:#fee2e2;color:#991b1b}
+.empty-col{text-align:center;padding:1.25rem .5rem;color:#cbd5e1;font-size:10px;border:1px dashed #e2e8f0;border-radius:7px}
+.toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:.5rem 1.25rem;border-radius:8px;font-size:12px;z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+/* Modal mover en celular */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:flex-end;justify-content:center}
+.modal-bg.show{display:flex}
+.modal-sheet{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:1.25rem}
+.modal-sheet h4{font-size:14px;font-weight:600;margin-bottom:1rem;text-align:center}
+.estado-btn{display:block;width:100%;padding:.75rem;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:.5rem;background:#fff;font-size:13px;cursor:pointer;text-align:left}
+.estado-btn:hover{background:#f8fafc}
+.estado-btn.current{opacity:.4;cursor:not-allowed}
+</style></head><body>
+
+<div class="top">
+  <h2>📊 Embudo</h2>
+  <select class="f-inp" id="fDep" onchange="load()"><option value="">Todos dep.</option></select>
+  <select class="f-inp" id="fRubro" onchange="load()"><option value="">Todos rubros</option></select>
+  <input class="f-inp" id="fQ" placeholder="🔍 Buscar..." oninput="load()" style="min-width:120px">
+  <span id="resumen" style="font-size:11px;color:#64748b;margin-left:auto"></span>
+</div>
+
+<div class="board" id="board"></div>
+<div class="toast" id="toast"></div>
+
+<!-- Modal mover (celular) -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal-sheet">
+    <h4 id="modalTitle">Mover contacto</h4>
+    <div id="modalOpciones"></div>
+    <button onclick="closeModal()" style="width:100%;height:36px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;margin-top:.25rem">Cancelar</button>
+  </div>
+</div>
+
+<script>
+const COLS = [
+  {id:'nuevo',      label:'🆕 Nuevo'},
+  {id:'contactado', label:'📞 Contactado'},
+  {id:'interesado', label:'⭐ Interesado'},
+  {id:'propuesta',  label:'📄 Propuesta'},
+  {id:'cerrado',    label:'✅ Cerrado'},
+  {id:'descartado', label:'❌ Descartado'},
+];
+
+let todos=[], dragId=null, dragEstadoOrig=null, modalNegocioId=null;
+// Touch drag vars
+let touchClone=null, touchStartX=0, touchStartY=0, lastDropCol=null;
+
+function toast(msg, ms=2500) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+async function load() {
+  const dep=document.getElementById('fDep').value;
+  const rubro=document.getElementById('fRubro').value;
+  const q=document.getElementById('fQ').value;
+  const url=`/api/negocios?limit=500${dep?'&dep='+encodeURIComponent(dep):''}${rubro?'&rubro='+encodeURIComponent(rubro):''}${q?'&q='+encodeURIComponent(q):''}`;
+  const data=await fetch(url).then(r=>r.json()).catch(()=>({rows:[]}));
+  todos=data.rows||[];
+  render();
+  document.getElementById('resumen').textContent=`${todos.length} contactos`;
+}
+
+function render() {
+  const board=document.getElementById('board');
+  board.innerHTML='';
+  COLS.forEach(col=>{
+    const items=todos.filter(r=>(r.estado_crm||'nuevo')===col.id);
+    const div=document.createElement('div');
+    div.className=`col ${col.id}`;
+    div.innerHTML=`<div class="col-header">${col.label}<span class="badge-count">${items.length}</span></div>
+      <div class="col-body" id="body_${col.id}"></div>`;
+    board.appendChild(div);
+    const body=div.querySelector('.col-body');
+
+    // Desktop drag events
+    body.addEventListener('dragover', e=>{e.preventDefault(); body.classList.add('drag-over');});
+    body.addEventListener('dragleave', e=>{if(!body.contains(e.relatedTarget)) body.classList.remove('drag-over');});
+    body.addEventListener('drop', e=>{e.preventDefault(); body.classList.remove('drag-over'); dropTo(col.id);});
+
+    if(!items.length){body.innerHTML='<div class="empty-col">Sin contactos</div>';return;}
+
+    items.forEach(r=>{
+      const card=document.createElement('div');
+      card.className='card';
+      card.draggable=true;
+      card.dataset.id=r.id;
+      card.dataset.estado=col.id;
+      card.innerHTML=`
+        <div class="card-name">${r.nombre}</div>
+        <div class="card-sub">📍 ${[r.distrito,r.provincia].filter(Boolean).join(', ')||'—'}</div>
+        ${r.telefono?`<div class="card-phone">📞 ${r.telefono}</div>`:''}
+        <div class="card-tags">
+          ${r.rubro_busqueda?`<span class="tag" style="background:#eff6ff;color:#2563eb">${r.rubro_busqueda}</span>`:''}
+          ${r.rating?`<span class="tag" style="background:#fffbeb;color:#92400e">⭐${r.rating}</span>`:''}
+          ${(r.whatsapp||r.telefono_int)?`<span class="tag" style="background:#f0fdf4;color:#15803d">📱</span>`:''}
+        </div>
+        <div class="card-footer">
+          <button class="ca" onclick="openModal(${r.id},'${r.nombre.replace(/'/g,"\\'")}','${col.id}')">🔄 Mover</button>
+          <button class="ca" onclick="agendar(${r.id},'${r.nombre.replace(/'/g,"\\'")}')">📅</button>
+        </div>`;
+
+      // Desktop drag
+      card.addEventListener('dragstart', e=>{
+        dragId=r.id; dragEstadoOrig=col.id;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain', String(r.id));
+      });
+      card.addEventListener('dragend', ()=>{
+        card.classList.remove('dragging');
+        document.querySelectorAll('.col-body').forEach(b=>b.classList.remove('drag-over'));
+      });
+
+      // Touch drag (mobile)
+      card.addEventListener('touchstart', e=>onTouchStart(e,r.id,col.id), {passive:true});
+      card.addEventListener('touchmove',  e=>onTouchMove(e),  {passive:false});
+      card.addEventListener('touchend',   e=>onTouchEnd(e),   {passive:true});
+
+      body.appendChild(card);
+    });
+  });
+}
+
+// ── Touch drag & drop ────────────────────────────────────────────────────────
+function onTouchStart(e, id, estado) {
+  dragId=id; dragEstadoOrig=estado;
+  const touch=e.touches[0];
+  touchStartX=touch.clientX; touchStartY=touch.clientY;
+  const card=e.currentTarget;
+  // crear clon visual
+  touchClone=card.cloneNode(true);
+  touchClone.classList.add('touch-clone');
+  touchClone.style.left=touchStartX-100+'px';
+  touchClone.style.top=touchStartY-30+'px';
+  document.body.appendChild(touchClone);
+  card.style.opacity='.3';
+}
+
+function onTouchMove(e) {
+  if(!touchClone) return;
+  e.preventDefault();
+  const touch=e.touches[0];
+  touchClone.style.left=touch.clientX-100+'px';
+  touchClone.style.top=touch.clientY-30+'px';
+  // detectar sobre qué columna estamos
+  touchClone.style.display='none';
+  const el=document.elementFromPoint(touch.clientX, touch.clientY);
+  touchClone.style.display='';
+  const body=el?.closest('.col-body');
+  if(body && body!==lastDropCol) {
+    document.querySelectorAll('.col-body').forEach(b=>b.classList.remove('drag-over'));
+    body.classList.add('drag-over');
+    lastDropCol=body;
+  }
+}
+
+function onTouchEnd(e) {
+  if(!touchClone) return;
+  // limpiar clon
+  document.body.removeChild(touchClone); touchClone=null;
+  document.querySelectorAll('.col').forEach(c=>{
+    c.querySelector('.card[style]') && (c.querySelector('.card[style]').style.opacity='');
+  });
+  document.querySelectorAll('.card').forEach(c=>c.style.opacity='');
+  document.querySelectorAll('.col-body').forEach(b=>b.classList.remove('drag-over'));
+
+  if(!lastDropCol) { dragId=null; lastDropCol=null; return; }
+  const colId=lastDropCol.id.replace('body_','');
+  lastDropCol=null;
+  dropTo(colId);
+}
+
+// ── Drop handler ──────────────────────────────────────────────────────────────
+async function dropTo(nuevoEstado) {
+  if(!dragId || nuevoEstado===dragEstadoOrig) { dragId=null; return; }
+  const id=dragId; dragId=null;
+  // UI instantánea
+  const item=todos.find(r=>r.id===id);
+  if(item) item.estado_crm=nuevoEstado;
+  render();
+  // Guardar en BD
+  try {
+    const r=await fetch(`/api/negocios/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado_crm:nuevoEstado})});
+    const d=await r.json();
+    if(d.ok) toast(`✅ Movido a ${COLS.find(c=>c.id===nuevoEstado)?.label}`);
+    else { toast('❌ Error: '+d.error); load(); }
+  } catch(err) { toast('❌ Error de red'); load(); }
+}
+
+// ── Modal mover (alternativa botón) ─────────────────────────────────────────
+function openModal(id, nombre, estadoActual) {
+  modalNegocioId=id;
+  document.getElementById('modalTitle').textContent=`Mover: ${nombre}`;
+  document.getElementById('modalOpciones').innerHTML=COLS.map(c=>`
+    <button class="estado-btn ${c.id===estadoActual?'current':''}" onclick="moverDesdeModal('${c.id}')" ${c.id===estadoActual?'disabled':''}>
+      ${c.label} ${c.id===estadoActual?'← actual':''}
+    </button>`).join('');
+  document.getElementById('modalBg').classList.add('show');
+}
+
+async function moverDesdeModal(nuevoEstado) {
+  closeModal();
+  const id=modalNegocioId;
+  const item=todos.find(r=>r.id===id);
+  if(item) item.estado_crm=nuevoEstado;
+  render();
+  try {
+    const r=await fetch(`/api/negocios/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado_crm:nuevoEstado})});
+    const d=await r.json();
+    if(d.ok) toast(`✅ Movido a ${COLS.find(c=>c.id===nuevoEstado)?.label}`);
+    else { toast('❌ Error: '+d.error); load(); }
+  } catch { toast('❌ Error de red'); load(); }
+}
+
+function closeModal() { document.getElementById('modalBg').classList.remove('show'); }
+
+// ── Agendar demo ─────────────────────────────────────────────────────────────
+async function agendar(id, nombre) {
+  const fecha=prompt(`Demo para "${nombre}"\nFecha (ej: 2026-08-20T10:00):`);
+  if(!fecha) return;
+  await fetch('/api/demos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({negocio_id:id,titulo:'Demo',fecha_hora:fecha,tipo:'virtual'})});
+  toast('📅 Demo agendada — recordatorio automático activado');
+}
+
+// ── Filtros ──────────────────────────────────────────────────────────────────
+async function initFiltros() {
+  const deps=await fetch('/api/ubigeo/departamentos').then(r=>r.json()).catch(()=>[]);
+  deps.forEach(d=>document.getElementById('fDep').innerHTML+=`<option value="${d}">${d}</option>`);
+  const data=await fetch('/api/negocios?limit=500').then(r=>r.json()).catch(()=>({rows:[]}));
+  const rubros=[...new Set((data.rows||[]).map(r=>r.rubro_busqueda).filter(Boolean))];
+  rubros.forEach(r=>document.getElementById('fRubro').innerHTML+=`<option value="${r}">${r}</option>`);
+}
+
+initFiltros();
+load();
+</script></body></html>
