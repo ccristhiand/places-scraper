@@ -262,21 +262,6 @@ function updateWAStatus(status, numero) {
   if (status === 'conectado') document.getElementById('qrModal').classList.remove('show');
 }
 
-socket.on('wa:status', ({ status, numero }) => updateWAStatus(status, numero));
-socket.on('wa:qr', ({ qr }) => {
-  document.getElementById('qrImg').src = qr;
-  document.getElementById('qrModal').classList.add('show');
-});
-
-socket.on('wa:mensaje_entrante', () => {
-  if (vistaActual === 'chat') return;
-  const badge  = document.getElementById('badgeChat');
-  const badgeS = document.getElementById('badgeChatSide');
-  const n = (parseInt(badge.textContent) || 0) + 1;
-  badge.textContent = n;  badge.style.display = '';
-  badgeS.textContent = n; badgeS.style.display = '';
-});
-
 async function toggleWA() {
   if (waStatusActual === 'conectado') {
     if (!confirm('¿Cerrar sesión de WhatsApp?')) return;
@@ -287,9 +272,6 @@ async function toggleWA() {
     await fetch('/api/wa/conectar', { method: 'POST' });
   }
 }
-
-// Estado inicial
-fetch('/api/wa/status').then(r => r.json()).then(d => updateWAStatus(d.status, d.numero));
 </script>
 </body>
 </html>
