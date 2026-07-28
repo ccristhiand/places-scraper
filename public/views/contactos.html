@@ -2,270 +2,603 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <link rel="stylesheet" href="/css/shared.css">
 <style>
-.layout{display:flex;gap:1rem;height:calc(100vh - 52px);overflow:hidden}
-.left{flex:1;min-width:0;display:flex;flex-direction:column;gap:.625rem;overflow:hidden}
-.right{width:320px;flex-shrink:0;overflow-y:auto;display:flex;flex-direction:column;gap:.625rem}
-.filters{display:flex;gap:6px;flex-wrap:wrap;padding:.625rem;background:#fff;border-bottom:1px solid var(--border)}
-.fi{height:32px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff}
+body{margin:0;padding:0}
+.layout{display:flex;height:100vh;overflow:hidden}
+.left{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.right{width:330px;flex-shrink:0;overflow-y:auto;border-left:1px solid var(--border);background:#f8fafc;display:flex;flex-direction:column;gap:.75rem;padding:.75rem}
+
+/* Filtros */
+.filter-bar{background:#fff;border-bottom:1px solid var(--border);padding:.625rem .875rem;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fi{height:32px;padding:0 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff;color:var(--text)}
 .fi:focus{outline:none;border-color:var(--accent)}
-.scroll{overflow-y:auto;flex:1}
-.hist-item{display:flex;gap:8px;padding:.625rem 0;border-bottom:1px solid var(--border-s)}
-.hist-ico{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.fi-search{flex:1;min-width:150px}
+.filter-toggle{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;cursor:pointer;color:var(--muted);white-space:nowrap}
+.filter-toggle.active{background:#eff6ff;border-color:#93c5fd;color:var(--accent);font-weight:500}
+
+/* Stats bar */
+.stats-bar{background:#fff;border-bottom:1px solid var(--border);padding:.5rem .875rem;display:flex;align-items:center;gap:.875rem;flex-wrap:wrap}
+.stat-pill{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.stat-pill b{color:var(--text);font-weight:700}
+.sel-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+.sel-count{font-size:12px;font-weight:600;color:var(--accent)}
+
+/* Tabla */
+.table-area{flex:1;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
+th.sort{cursor:pointer}
+th.sort:hover{color:var(--text)}
+td{padding:9px 10px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+tr:hover td{background:#fafafa}
+tr.sel td{background:#eff6ff}
+input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:14px;height:14px}
+
+/* Badges CRM */
+.badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.b-blue{background:#dbeafe;color:#1d4ed8}
+.b-yellow{background:#fef9c3;color:#854d0e}
+.b-orange{background:#ffedd5;color:#9a3412}
+.b-purple{background:#f3e8ff;color:#7e22ce}
+.b-green{background:#dcfce7;color:#15803d}
+.b-red{background:#fee2e2;color:#991b1b}
+.b-gray{background:#f1f5f9;color:#64748b}
+.b-warn{background:#fef9c3;color:#854d0e;border:1px solid #fde68a}
+
+/* Paginación */
+.pagination{background:#fff;border-top:1px solid var(--border);padding:.625rem .875rem;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0}
+.page-info{font-size:12px;color:var(--muted)}
+.page-btns{display:flex;gap:4px}
+.pbtn{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:5px;background:#fff;font-size:12px;cursor:pointer;color:var(--text)}
+.pbtn:hover{background:#f8fafc}
+.pbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pbtn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Panel derecho */
+.panel-card{background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden}
+.panel-card .card-h{padding:.75rem;border-bottom:1px solid var(--border-s);font-size:13px;font-weight:600}
+.panel-card .card-b{padding:.75rem;display:flex;flex-direction:column;gap:.5rem}
+.panel-empty{text-align:center;padding:2rem 1rem;color:var(--faint);font-size:13px}
+
+/* Historial */
+.hist-item{display:flex;gap:8px;padding:.5rem 0;border-bottom:1px solid var(--border-s)}
+.hist-ico{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
 .hist-body{flex:1;min-width:0}
-.hist-tipo{font-size:11px;font-weight:600;color:var(--text)}
-.hist-txt{font-size:12px;color:var(--muted);margin-top:2px;word-break:break-word}
 .hist-ts{font-size:10px;color:var(--faint);margin-top:2px}
-/* Mobile */
-.contact-cards{display:none}
-.cc{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:.875rem;margin-bottom:.5rem;cursor:pointer}
-.cc.active{border-color:var(--accent);background:#eff6ff}
-.cc-name{font-size:13px;font-weight:600}
-.cc-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.cc-badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:600;margin-top:4px}
-.panel-mobile{display:none;position:fixed;inset:0;background:#fff;z-index:50;flex-direction:column;overflow-y:auto}
-.panel-mobile-h{padding:.875rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#fff}
-@media(max-width:768px){
-  .layout{flex-direction:column;height:auto;overflow:visible}
-  .left{overflow:visible}
-  .right{width:100%;display:none}
-  .tbl-wrap table{display:none}
-  .contact-cards{display:block;padding:.625rem}
-  .panel-mobile{display:none}
-  .panel-mobile.open{display:flex}
+
+/* Mobile panel */
+.mobile-panel{display:none;position:fixed;inset:0;background:#fff;z-index:50;flex-direction:column;overflow-y:auto}
+.mobile-panel.open{display:flex}
+.mobile-panel-h{padding:.875rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:#fff;position:sticky;top:0;z-index:1}
+
+/* Mobile cards */
+.m-cards{display:none;padding:.75rem;flex-direction:column;gap:.5rem}
+.m-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:.875rem;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.m-card.sel{border-color:var(--accent);background:#eff6ff}
+.m-card-info{flex:1;min-width:0}
+.m-card-name{font-size:13px;font-weight:600}
+.m-card-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.m-card-meta{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;align-items:center}
+
+@media(max-width:900px){
+  .right{display:none}
+  table{display:none}
+  .m-cards{display:flex}
+  .filter-bar{gap:5px}
 }
 </style></head><body>
-<div class="page" style="padding:0">
 <div class="layout">
-
 <div class="left">
-  <div class="filters">
-    <input class="fi" id="fQ" placeholder="🔍 Nombre o teléfono..." oninput="load()" style="min-width:160px;flex:1">
-    <select class="fi" id="fDep" onchange="load()"><option value="">Todos dep.</option></select>
-    <select class="fi" id="fEstado" onchange="load()">
-      <option value="">Todos estados</option>
-      <option value="nuevo">🆕 Nuevo</option><option value="contactado">📞 Contactado</option>
-      <option value="interesado">⭐ Interesado</option><option value="propuesta">📄 Propuesta</option>
-      <option value="cerrado">✅ Cerrado</option><option value="descartado">❌ Descartado</option>
+
+  <!-- Barra de filtros -->
+  <div class="filter-bar">
+    <input class="fi fi-search" id="fQ" placeholder="🔍 Buscar nombre, teléfono, dirección..." oninput="debounce()">
+    <select class="fi" id="fDep" onchange="resetPage();load()"><option value="">Todos dep.</option></select>
+    <select class="fi" id="fRubro" onchange="resetPage();load()"><option value="">Todos rubros</option></select>
+    <select class="fi" id="fEstado" onchange="resetPage();load()">
+      <option value="">Todos estados CRM</option>
+      <option value="nuevo">🆕 Nuevo</option>
+      <option value="contactado">📞 Contactado</option>
+      <option value="interesado">⭐ Interesado</option>
+      <option value="propuesta">📄 Propuesta</option>
+      <option value="cerrado">✅ Cerrado</option>
+      <option value="descartado">❌ Descartado</option>
     </select>
-    <span id="total" style="font-size:11px;color:var(--faint);align-self:center;white-space:nowrap"></span>
+    <button class="filter-toggle" id="btnSinNum" onclick="toggleSinNum()">📵 Sin número</button>
+    <button class="filter-toggle" id="btnConWA"  onclick="toggleConWA()">📱 Con WA</button>
   </div>
 
-  <!-- Desktop table -->
-  <div class="tbl-wrap scroll" style="flex:1">
-    <table><thead><tr>
-      <th>Nombre</th><th>Teléfono</th><th>WA</th><th>Ubicación</th><th>Estado CRM</th><th>Rubro</th><th></th>
-    </tr></thead><tbody id="tbody"></tbody></table>
-    <div class="empty" id="emptyDesk" style="display:none"><div class="empty-icon">👥</div><p>Sin contactos guardados</p></div>
-  </div>
-
-  <!-- Mobile cards -->
-  <div class="contact-cards" id="mobileList"></div>
-</div>
-
-<!-- Desktop right panel -->
-<div class="right" id="rightPanel">
-  <div class="card" id="panelVacio">
-    <div class="card-b" style="text-align:center;padding:2rem">
-      <div style="font-size:32px;margin-bottom:.5rem">👆</div>
-      <p style="font-size:13px;color:var(--muted)">Selecciona un contacto para ver su historial</p>
+  <!-- Stats + acciones masivas -->
+  <div class="stats-bar">
+    <div class="stat-pill">Total: <b id="stTotal">0</b></div>
+    <div class="stat-pill">Página: <b id="stPagina">1</b></div>
+    <div class="stat-pill" id="stSinNum" style="display:none">⚠️ Sin número: <b id="stSinNumN" style="color:#dc2626">0</b></div>
+    <div class="sel-actions">
+      <span class="sel-count" id="selCount" style="display:none"></span>
+      <button id="btnElimSel" onclick="eliminarSeleccionados()" style="display:none;height:26px;padding:0 10px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Eliminar seleccionados</button>
+      <button onclick="selAll()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">☑ Seleccionar página</button>
+      <button onclick="deselAll()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">✕ Deseleccionar</button>
     </div>
   </div>
-  <div id="panelDetalle" style="display:none">
-    <div class="card">
-      <div class="card-h"><h3 id="detNombre" style="font-size:13px">—</h3></div>
-      <div class="card-b" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:12px;color:var(--muted)" id="detInfo"></div>
+
+  <!-- Tabla desktop -->
+  <div class="table-area">
+    <table>
+      <thead><tr>
+        <th style="width:30px"><input type="checkbox" id="chkAll" onchange="togAll(this.checked)"></th>
+        <th class="sort" onclick="setSort('nombre')">Nombre <span id="sNombre"></span></th>
+        <th>Teléfono / WA</th>
+        <th>Ubicación</th>
+        <th class="sort" onclick="setSort('rubro_busqueda')">Rubro <span id="sRubro"></span></th>
+        <th class="sort" onclick="setSort('rating')">Rating <span id="sRating"></span></th>
+        <th>Estado CRM</th>
+        <th>Acciones</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="emptyMsg" style="display:none;text-align:center;padding:3rem;color:var(--faint)">
+      <div style="font-size:32px;margin-bottom:.5rem">👥</div>
+      <p style="font-size:14px;font-weight:500;color:var(--text)">Sin contactos</p>
+      <p style="font-size:13px;margin-top:4px">Ajusta los filtros o busca negocios primero</p>
+    </div>
+
+    <!-- Mobile cards -->
+    <div class="m-cards" id="mCards"></div>
+  </div>
+
+  <!-- Paginación -->
+  <div class="pagination">
+    <span class="page-info" id="pageInfo">—</span>
+    <div class="page-btns" id="pageBtns"></div>
+    <select class="fi" id="perPage" onchange="resetPage();load()" style="height:28px;font-size:11px">
+      <option value="20">20 por pág.</option>
+      <option value="50">50 por pág.</option>
+      <option value="100">100 por pág.</option>
+    </select>
+  </div>
+</div>
+
+<!-- Panel derecho -->
+<div class="right" id="panelRight">
+  <div class="panel-card">
+    <div class="panel-empty" id="panelEmpty">
+      <div style="font-size:28px;margin-bottom:.5rem">👆</div>
+      <p>Selecciona un contacto</p>
+    </div>
+    <div id="panelDetalle" style="display:none">
+      <div class="card-h" id="panelNombre">—</div>
+      <div class="card-b">
+        <div style="font-size:12px;color:var(--muted)" id="panelInfo"></div>
         <select id="detEstado" onchange="cambiarEstado()" style="height:34px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:0 8px">
           <option value="nuevo">🆕 Nuevo</option><option value="contactado">📞 Contactado</option>
           <option value="interesado">⭐ Interesado</option><option value="propuesta">📄 Propuesta</option>
           <option value="cerrado">✅ Cerrado</option><option value="descartado">❌ Descartado</option>
         </select>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-outline btn-sm" onclick="openDemo()" style="flex:1;justify-content:center">📅 Demo</button>
-          <button class="btn btn-outline btn-sm" onclick="irChat()" style="flex:1;justify-content:center">💬 Chat</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <button onclick="openDemo()" class="btn btn-outline btn-sm" style="justify-content:center">📅 Demo</button>
+          <button onclick="irChat()"   class="btn btn-outline btn-sm" style="justify-content:center">💬 Chat</button>
         </div>
-        <input id="detWA" placeholder="WA: 51XXXXXXXXX" style="height:32px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:0 8px;width:100%">
-        <button onclick="guardarWA()" class="btn btn-success btn-sm" style="width:100%;justify-content:center">Guardar número WA</button>
+        <div style="display:flex;gap:6px">
+          <input id="detWA" placeholder="WA: 51XXXXXXXXX" style="flex:1;height:32px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:0 8px">
+          <button onclick="guardarWA()" class="btn btn-success btn-sm" style="white-space:nowrap">💾 WA</button>
+        </div>
+        <button onclick="eliminarActivo()" style="width:100%;height:28px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:12px;cursor:pointer">🗑️ Eliminar contacto</button>
       </div>
     </div>
-    <div class="card">
-      <div class="card-h"><h3>📝 Agregar nota</h3></div>
-      <div class="card-b">
-        <select id="tipoNota" style="width:100%;height:32px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:0 8px;margin-bottom:6px">
-          <option value="comentario">💬 Comentario</option>
-          <option value="llamada">📞 Llamada</option>
-          <option value="mensaje">📤 Mensaje</option>
-        </select>
-        <textarea id="notaTxt" placeholder="Escribe tu nota..." style="width:100%;height:70px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:8px;resize:none;font-family:inherit"></textarea>
-        <button onclick="addNota()" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:6px">Guardar nota</button>
-      </div>
+  </div>
+
+  <div class="panel-card">
+    <div class="card-h">📝 Agregar nota</div>
+    <div class="card-b">
+      <select id="tipoNota" style="height:32px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:0 8px">
+        <option value="comentario">💬 Comentario</option>
+        <option value="llamada">📞 Llamada</option>
+        <option value="mensaje">📤 Mensaje</option>
+      </select>
+      <textarea id="notaTxt" placeholder="Escribe tu nota..." style="height:70px;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;resize:none;font-family:inherit;width:100%"></textarea>
+      <button onclick="addNota()" class="btn btn-primary btn-sm" style="width:100%;justify-content:center">Guardar nota</button>
     </div>
-    <div class="card">
-      <div class="card-h"><h3>📋 Historial</h3></div>
-      <div id="historial" style="padding:.5rem 1rem;max-height:280px;overflow-y:auto"></div>
+  </div>
+
+  <div class="panel-card">
+    <div class="card-h">📋 Historial</div>
+    <div id="historial" style="padding:.5rem .75rem;max-height:260px;overflow-y:auto">
+      <div style="text-align:center;padding:1rem;color:var(--faint);font-size:12px">Selecciona un contacto</div>
     </div>
   </div>
 </div>
-
 </div>
 
 <!-- Mobile detail panel -->
-<div class="panel-mobile" id="panelMobile">
-  <div class="panel-mobile-h">
-    <button onclick="closeMobilePanel()" style="background:none;border:none;font-size:22px;cursor:pointer">←</button>
-    <h3 id="mobileDetNombre" style="font-size:14px;font-weight:600;flex:1"></h3>
+<div class="mobile-panel" id="mobilePanel">
+  <div class="mobile-panel-h">
+    <button onclick="closeMobile()" style="background:none;border:none;font-size:24px;cursor:pointer;line-height:1">←</button>
+    <h3 id="mobilePanelTitle" style="font-size:14px;font-weight:600;flex:1"></h3>
+    <button onclick="eliminarActivo()" style="height:28px;padding:0 10px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:11px;cursor:pointer">🗑️</button>
   </div>
-  <div style="padding:1rem;display:flex;flex-direction:column;gap:.875rem">
-    <div class="card" style="margin-bottom:0">
-      <div class="card-b" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:12px;color:var(--muted)" id="mobileDetInfo"></div>
-        <select id="mobileDetEstado" onchange="cambiarEstadoMobile()" style="height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px">
-          <option value="nuevo">🆕 Nuevo</option><option value="contactado">📞 Contactado</option>
-          <option value="interesado">⭐ Interesado</option><option value="propuesta">📄 Propuesta</option>
-          <option value="cerrado">✅ Cerrado</option><option value="descartado">❌ Descartado</option>
-        </select>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button class="btn btn-outline" onclick="openDemo()" style="justify-content:center">📅 Demo</button>
-          <button class="btn btn-outline" onclick="irChat()" style="justify-content:center">💬 Chat</button>
-        </div>
-        <input id="mobileDetWA" placeholder="WA: 51XXXXXXXXX" style="height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px;width:100%">
-        <button onclick="guardarWAMobile()" class="btn btn-success" style="width:100%;justify-content:center">Guardar número WA</button>
-      </div>
+  <div style="padding:.875rem;display:flex;flex-direction:column;gap:.75rem">
+    <div style="font-size:12px;color:var(--muted)" id="mobilePanelInfo"></div>
+    <select id="mobileDetEstado" onchange="cambiarEstadoMobile()" style="height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px">
+      <option value="nuevo">🆕 Nuevo</option><option value="contactado">📞 Contactado</option>
+      <option value="interesado">⭐ Interesado</option><option value="propuesta">📄 Propuesta</option>
+      <option value="cerrado">✅ Cerrado</option><option value="descartado">❌ Descartado</option>
+    </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button onclick="openDemo()" class="btn btn-outline" style="justify-content:center">📅 Demo</button>
+      <button onclick="irChat()"   class="btn btn-outline" style="justify-content:center">💬 Chat</button>
     </div>
-    <div class="card" style="margin-bottom:0">
-      <div class="card-h"><h3>📝 Nota</h3></div>
-      <div class="card-b">
-        <select id="tipoNotaMobile" style="width:100%;height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px;margin-bottom:8px">
-          <option value="comentario">💬 Comentario</option><option value="llamada">📞 Llamada</option><option value="mensaje">📤 Mensaje</option>
-        </select>
-        <textarea id="notaTxtMobile" placeholder="Escribe tu nota..." style="width:100%;height:80px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:10px;resize:none;font-family:inherit"></textarea>
-        <button onclick="addNotaMobile()" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px">Guardar nota</button>
-      </div>
+    <div style="display:flex;gap:8px">
+      <input id="mobileDetWA" placeholder="WA: 51XXXXXXXXX" style="flex:1;height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px">
+      <button onclick="guardarWAMobile()" class="btn btn-success" style="white-space:nowrap">💾 WA</button>
     </div>
-    <div class="card" style="margin-bottom:0">
-      <div class="card-h"><h3>📋 Historial</h3></div>
-      <div id="historialMobile" style="padding:.5rem 1rem"></div>
-    </div>
+    <select id="tipoNotaM" style="height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px">
+      <option value="comentario">💬 Comentario</option><option value="llamada">📞 Llamada</option>
+    </select>
+    <textarea id="notaTxtM" placeholder="Nota..." style="height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;resize:none;font-family:inherit"></textarea>
+    <button onclick="addNotaM()" class="btn btn-primary" style="width:100%;justify-content:center">Guardar nota</button>
+    <div id="historialM" style="margin-top:.5rem"></div>
   </div>
 </div>
 
 <!-- Demo modal -->
 <div id="demoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center">
-  <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:1.25rem;max-height:90vh;overflow-y:auto">
+  <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:1.25rem;max-height:85vh;overflow-y:auto">
     <div style="font-weight:600;font-size:14px;margin-bottom:1rem">📅 Agendar demo</div>
     <div class="field"><label>Título</label><input id="dTitulo" placeholder="Demo / Presentación..."></div>
     <div class="field"><label>Fecha y hora</label><input id="dFecha" type="datetime-local"></div>
     <div class="field"><label>Tipo</label>
       <select id="dTipo"><option value="virtual">🖥️ Virtual</option><option value="presencial">🏢 Presencial</option><option value="telefonica">📞 Telefónica</option></select>
     </div>
-    <div class="field"><label>Enlace (Zoom/Meet)</label><input id="dEnlace" placeholder="https://..."></div>
+    <div class="field"><label>Enlace</label><input id="dEnlace" placeholder="https://zoom.us/..."></div>
     <div class="field"><label>Responsable</label><input id="dResp" placeholder="Tu nombre"></div>
     <div style="display:flex;gap:8px;margin-top:.5rem">
-      <button onclick="document.getElementById('demoModal').style.display='none'" class="btn btn-outline" style="flex:1;justify-content:center">Cancelar</button>
-      <button onclick="guardarDemo()" class="btn btn-primary" style="flex:1;justify-content:center">Agendar</button>
+      <button onclick="closeDemoModal()" class="btn btn-outline" style="flex:1;justify-content:center">Cancelar</button>
+      <button onclick="guardarDemo()"    class="btn btn-primary" style="flex:1;justify-content:center">📅 Agendar</button>
     </div>
   </div>
 </div>
-</div>
 
 <script>
-let activo=null;
-const CRM_C={nuevo:'b-blue',contactado:'b-yellow',interesado:'b-orange',propuesta:'b-purple',cerrado:'b-green',descartado:'b-red'};
-const CRM_L={nuevo:'🆕 Nuevo',contactado:'📞 Contactado',interesado:'⭐ Interesado',propuesta:'📄 Propuesta',cerrado:'✅ Cerrado',descartado:'❌ Descartado'};
-const HIST_I={estado:'🔄',comentario:'💬',llamada:'📞',demo:'📅',mensaje:'📤'};
-const HIST_C={estado:'#dbeafe',comentario:'#f1f5f9',llamada:'#fef9c3',demo:'#f3e8ff',mensaje:'#dcfce7'};
+var activo    = null;
+var pagina    = 0;
+var sortCol   = 'created_at';
+var sortDir   = 'DESC';
+var sinNum    = false;
+var conWA     = false;
+var selIds    = new Set();
+var debTimer  = null;
 
-async function load(){
-  const q=document.getElementById('fQ').value, dep=document.getElementById('fDep').value, estado=document.getElementById('fEstado').value;
-  const url=`/api/negocios?limit=300${q?'&q='+encodeURIComponent(q):''}${dep?'&dep='+encodeURIComponent(dep):''}${estado?'&estado_crm='+estado:''}`;
-  const data=await fetch(url).then(r=>r.json()).catch(()=>({rows:[]}));
-  const rows=data.rows||[];
-  document.getElementById('total').textContent=rows.length+' contactos';
-  document.getElementById('emptyDesk').style.display=rows.length?'none':'block';
-  // Desktop
-  document.getElementById('tbody').innerHTML=rows.map(r=>`<tr onclick="selRow(${JSON.stringify(r).replace(/"/g,'&quot;')})" style="cursor:pointer" ${activo?.id===r.id?'class="selected"':''}>
-    <td><b>${r.nombre}</b></td>
-    <td><span style="font-family:monospace;font-size:11px;color:var(--accent)">${r.telefono||'—'}</span></td>
-    <td style="font-size:11px">${r.whatsapp||'—'}</td>
-    <td style="font-size:11px;color:var(--muted)">${[r.distrito,r.provincia].filter(Boolean).join(', ')||'—'}</td>
-    <td><span class="badge ${CRM_C[r.estado_crm]||'b-blue'}">${CRM_L[r.estado_crm]||r.estado_crm}</span></td>
-    <td style="font-size:11px;color:var(--muted)">${r.rubro_busqueda||'—'}</td>
-    <td><button class="btn btn-outline btn-xs" onclick="event.stopPropagation();selRow(${JSON.stringify(r).replace(/"/g,'&quot;')})">Ver</button></td>
-  </tr>`).join('');
+var CRM_C = {nuevo:'b-blue',contactado:'b-yellow',interesado:'b-orange',propuesta:'b-purple',cerrado:'b-green',descartado:'b-red'};
+var CRM_L = {nuevo:'🆕 Nuevo',contactado:'📞 Contactado',interesado:'⭐ Interesado',propuesta:'📄 Propuesta',cerrado:'✅ Cerrado',descartado:'❌ Descartado'};
+var HIST_I = {estado:'🔄',comentario:'💬',llamada:'📞',demo:'📅',mensaje:'📤'};
+var HIST_C = {estado:'#dbeafe',comentario:'#f1f5f9',llamada:'#fef9c3',demo:'#f3e8ff',mensaje:'#dcfce7'};
+
+function debounce() {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(function() { resetPage(); load(); }, 350);
+}
+
+function resetPage() { pagina = 0; }
+
+function toggleSinNum() {
+  sinNum = !sinNum; conWA = false;
+  document.getElementById('btnSinNum').classList.toggle('active', sinNum);
+  document.getElementById('btnConWA').classList.remove('active');
+  resetPage(); load();
+}
+function toggleConWA() {
+  conWA = !conWA; sinNum = false;
+  document.getElementById('btnConWA').classList.toggle('active', conWA);
+  document.getElementById('btnSinNum').classList.remove('active');
+  resetPage(); load();
+}
+
+function setSort(col) {
+  if (sortCol === col) sortDir = sortDir === 'ASC' ? 'DESC' : 'ASC';
+  else { sortCol = col; sortDir = 'ASC'; }
+  ['Nombre','Rubro','Rating'].forEach(function(n) { document.getElementById('s'+n).textContent = ''; });
+  var map = {nombre:'sNombre',rubro_busqueda:'sRubro',rating:'sRating'};
+  if (map[col]) document.getElementById(map[col]).textContent = sortDir === 'ASC' ? ' ↑' : ' ↓';
+  load();
+}
+
+async function load() {
+  var q        = document.getElementById('fQ').value;
+  var dep      = document.getElementById('fDep').value;
+  var rubro    = document.getElementById('fRubro').value;
+  var estado   = document.getElementById('fEstado').value;
+  var perPage  = parseInt(document.getElementById('perPage').value) || 20;
+
+  var url = '/api/negocios?limit=' + perPage + '&offset=' + (pagina * perPage);
+  if (q)      url += '&q='          + encodeURIComponent(q);
+  if (dep)    url += '&dep='        + encodeURIComponent(dep);
+  if (rubro)  url += '&rubro='      + encodeURIComponent(rubro);
+  if (estado) url += '&estado_crm=' + encodeURIComponent(estado);
+  if (sinNum) url += '&sin_numero=1';
+
+  var data = await fetch(url).then(function(r){return r.json();}).catch(function(){return {rows:[],total:0};});
+  var rows  = data.rows || [];
+  var total = data.total || 0;
+
+  // Stats
+  document.getElementById('stTotal').textContent  = total;
+  document.getElementById('stPagina').textContent = pagina + 1;
+
+  // Sin número count (siempre visible)
+  if (!sinNum) {
+    var snUrl  = '/api/negocios?limit=1&sin_numero=1' + (dep?'&dep='+encodeURIComponent(dep):'') + (rubro?'&rubro='+encodeURIComponent(rubro):'') + (estado?'&estado_crm='+encodeURIComponent(estado):'');
+    fetch(snUrl).then(function(r){return r.json();}).then(function(d){
+      var n = d.total || 0;
+      document.getElementById('stSinNum').style.display  = n > 0 ? '' : 'none';
+      document.getElementById('stSinNumN').textContent = n;
+    });
+  }
+
+  // Tabla desktop
+  var tbody = document.getElementById('tbody');
+  var empty = document.getElementById('emptyMsg');
+  tbody.innerHTML = '';
+  empty.style.display = rows.length ? 'none' : 'block';
+
+  rows.forEach(function(r) {
+    var sinNumero = !r.telefono && !r.telefono_int && !r.whatsapp;
+    var tr = document.createElement('tr');
+    if (selIds.has(r.id)) tr.classList.add('sel');
+    tr.innerHTML =
+      '<td><input type="checkbox" class="rowchk" data-id="'+r.id+'" '+(selIds.has(r.id)?'checked':'')+' onchange="togSel(this)"></td>' +
+      '<td><b style="font-size:12px">'+esc(r.nombre)+'</b>' +
+        (sinNumero ? '<br><span class="badge b-warn" style="margin-top:2px">⚠️ Sin número</span>' : '') +
+      '</td>' +
+      '<td>' +
+        (r.whatsapp ? '<span style="font-size:11px;color:#22c55e">📱 '+esc(r.whatsapp)+'</span><br>' : '') +
+        (r.telefono ? '<span style="font-family:monospace;font-size:11px;color:var(--accent)">'+esc(r.telefono)+'</span>' : '<span style="color:#cbd5e1;font-size:11px">—</span>') +
+      '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">'+esc([r.distrito,r.provincia].filter(Boolean).join(', '))||'—'+'</td>' +
+      '<td style="font-size:11px;color:var(--muted)">'+esc(r.rubro_busqueda||'—')+'</td>' +
+      '<td>' + (r.rating ? '<span style="color:#f59e0b">★</span> '+r.rating : '—') + '</td>' +
+      '<td><span class="badge '+(CRM_C[r.estado_crm]||'b-gray')+'">'+(CRM_L[r.estado_crm]||r.estado_crm)+'</span></td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="btn btn-outline btn-xs" onclick="selRow('+r.id+')">Ver</button> ' +
+        '<button class="btn btn-xs" onclick="eliminarUno('+r.id+')" style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626">🗑️</button>' +
+      '</td>';
+    tr.addEventListener('click', function(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+      selRow(r.id);
+    });
+    tbody.appendChild(tr);
+  });
+
   // Mobile cards
-  document.getElementById('mobileList').innerHTML=rows.map(r=>`
-    <div class="cc ${activo?.id===r.id?'active':''}" onclick="selRowMobile(${JSON.stringify(r).replace(/"/g,'&quot;')})">
-      <div class="cc-name">${r.nombre}</div>
-      <div class="cc-sub">📞 ${r.telefono||'—'} · 📍 ${[r.distrito,r.provincia].filter(Boolean).join(', ')||'—'}</div>
-      <span class="cc-badge ${CRM_C[r.estado_crm]||'b-blue'}">${CRM_L[r.estado_crm]||r.estado_crm}</span>
-    </div>`).join('');
+  var mCards = document.getElementById('mCards');
+  mCards.innerHTML = rows.map(function(r) {
+    var sinNumero = !r.telefono && !r.telefono_int && !r.whatsapp;
+    return '<div class="m-card '+(selIds.has(r.id)?'sel':'')+'" onclick="selRowMobile('+r.id+')">' +
+      '<input type="checkbox" class="rowchk" data-id="'+r.id+'" '+(selIds.has(r.id)?'checked':'')+' onchange="togSel(this);event.stopPropagation()" style="margin-top:2px">' +
+      '<div class="m-card-info">' +
+        '<div class="m-card-name">'+esc(r.nombre)+'</div>' +
+        '<div class="m-card-sub">📍 '+esc([r.distrito,r.provincia].filter(Boolean).join(', ')||'—')+'</div>' +
+        '<div class="m-card-meta">' +
+          (r.whatsapp ? '<span style="font-size:11px;color:#22c55e">📱 '+esc(r.whatsapp)+'</span>' : '') +
+          (r.telefono ? '<span style="font-size:11px;color:var(--accent);font-family:monospace">'+esc(r.telefono)+'</span>' : '') +
+          (sinNumero ? '<span class="badge b-warn">⚠️ Sin número</span>' : '') +
+          '<span class="badge '+(CRM_C[r.estado_crm]||'b-gray')+'">'+(CRM_L[r.estado_crm]||r.estado_crm)+'</span>' +
+        '</div>' +
+      '</div>' +
+      '</div>';
+  }).join('');
+
+  // Paginación
+  renderPaginacion(total, perPage);
+  updSelUI();
 }
 
-function selRow(r){
-  activo=r;
-  document.getElementById('panelVacio').style.display='none';
+function renderPaginacion(total, perPage) {
+  var totalPags = Math.ceil(total / perPage) || 1;
+  var info = document.getElementById('pageInfo');
+  var btns = document.getElementById('pageBtns');
+  var desde = pagina * perPage + 1;
+  var hasta = Math.min((pagina + 1) * perPage, total);
+  info.textContent = desde + '–' + hasta + ' de ' + total;
+
+  var html = '<button class="pbtn" onclick="irPag('+( pagina-1)+')" '+(pagina===0?'disabled':'')+'>‹</button>';
+  var start = Math.max(0, pagina - 2);
+  var end   = Math.min(totalPags - 1, pagina + 2);
+  for (var i = start; i <= end; i++) {
+    html += '<button class="pbtn '+(i===pagina?'active':'')+'" onclick="irPag('+i+')">'+(i+1)+'</button>';
+  }
+  html += '<button class="pbtn" onclick="irPag('+(pagina+1)+')" '+(pagina>=totalPags-1?'disabled':'')+'>›</button>';
+  btns.innerHTML = html;
+}
+
+function irPag(p) { if (p < 0) return; pagina = p; load(); }
+
+// ── Selección ────────────────────────────────────────────────────────────────
+function togSel(chk) {
+  var id = +chk.dataset.id;
+  if (chk.checked) selIds.add(id); else selIds.delete(id);
+  updSelUI();
+}
+function togAll(v) {
+  document.querySelectorAll('.rowchk').forEach(function(c) {
+    c.checked = v;
+    var id = +c.dataset.id;
+    if (v) selIds.add(id); else selIds.delete(id);
+  });
+  updSelUI();
+}
+function selAll() { togAll(true); document.getElementById('chkAll').checked = true; }
+function deselAll() { selIds.clear(); document.querySelectorAll('.rowchk').forEach(function(c){c.checked=false;}); document.getElementById('chkAll').checked=false; updSelUI(); }
+function updSelUI() {
+  var n = selIds.size;
+  document.getElementById('selCount').textContent = n > 0 ? n + ' seleccionados' : '';
+  document.getElementById('selCount').style.display = n > 0 ? '' : 'none';
+  document.getElementById('btnElimSel').style.display = n > 0 ? '' : 'none';
+}
+
+// ── Eliminar ──────────────────────────────────────────────────────────────────
+async function eliminarUno(id) {
+  if (!confirm('¿Eliminar este contacto?')) return;
+  await fetch('/api/negocios/' + id, { method: 'DELETE' });
+  if (activo && activo.id === id) { activo = null; document.getElementById('panelDetalle').style.display='none'; document.getElementById('panelEmpty').style.display='block'; }
+  load();
+}
+async function eliminarActivo() {
+  if (!activo) return;
+  if (!confirm('¿Eliminar "' + activo.nombre + '"?')) return;
+  await fetch('/api/negocios/' + activo.id, { method: 'DELETE' });
+  activo = null;
+  document.getElementById('panelDetalle').style.display='none';
+  document.getElementById('panelEmpty').style.display='block';
+  closeMobile();
+  load();
+}
+async function eliminarSeleccionados() {
+  if (!selIds.size) return;
+  if (!confirm('¿Eliminar ' + selIds.size + ' contactos seleccionados? Esta acción no se puede deshacer.')) return;
+  var r = await fetch('/api/negocios/eliminar-bulk', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids: Array.from(selIds) }) });
+  var d = await r.json();
+  if (d.ok) { alert('✅ Eliminados: ' + d.eliminados); selIds.clear(); load(); }
+  else alert('Error: ' + d.error);
+}
+
+// ── Ver contacto ──────────────────────────────────────────────────────────────
+async function selRow(id) {
+  var r = await fetch('/api/negocios?q=&limit=1&offset=0').then(function(r){return r.json();}).catch(function(){return {rows:[]};});
+  // Buscar en rows actuales del tbody
+  var rows = Array.from(document.querySelectorAll('#tbody tr'));
+  // Obtener datos del negocio desde la API
+  var nr = await fetch('/api/crm/'+id).then(function(r){return r.json();}).catch(function(){return {};});
+  var neg = nr.negocio || null;
+  if (!neg) return;
+  activo = neg;
+  document.getElementById('panelEmpty').style.display='none';
   document.getElementById('panelDetalle').style.display='';
-  document.getElementById('detNombre').textContent=r.nombre;
-  document.getElementById('detInfo').innerHTML=`📞 ${r.telefono||'—'} · 📍 ${[r.distrito,r.provincia,r.departamento].filter(Boolean).join(', ')||'—'}`;
-  document.getElementById('detEstado').value=r.estado_crm||'nuevo';
-  document.getElementById('detWA').value=r.whatsapp||'';
-  loadHistorial(r.id);
+  document.getElementById('panelNombre').textContent = neg.nombre;
+  document.getElementById('panelInfo').innerHTML =
+    '📞 '+(neg.telefono||'—')+'<br>'+
+    (neg.whatsapp?'📱 '+neg.whatsapp+'<br>':'')+
+    '📍 '+[neg.distrito,neg.provincia,neg.departamento].filter(Boolean).join(', ')+'<br>'+
+    '🏷️ '+(neg.rubro_busqueda||'—')+' · ⭐ '+(neg.rating||'—');
+  document.getElementById('detEstado').value = neg.estado_crm || 'nuevo';
+  document.getElementById('detWA').value = neg.whatsapp || '';
+  renderHistorial(nr.historial||[], 'historial');
 }
 
-function selRowMobile(r){
-  activo=r;
-  document.getElementById('mobileDetNombre').textContent=r.nombre;
-  document.getElementById('mobileDetInfo').innerHTML=`📞 ${r.telefono||'—'} · 📍 ${[r.distrito,r.provincia].filter(Boolean).join(', ')||'—'}`;
-  document.getElementById('mobileDetEstado').value=r.estado_crm||'nuevo';
-  document.getElementById('mobileDetWA').value=r.whatsapp||'';
-  document.getElementById('panelMobile').classList.add('open');
-  loadHistorialEl(r.id, 'historialMobile');
+async function selRowMobile(id) {
+  var nr = await fetch('/api/crm/'+id).then(function(r){return r.json();}).catch(function(){return {};});
+  var neg = nr.negocio || null;
+  if (!neg) return;
+  activo = neg;
+  document.getElementById('mobilePanelTitle').textContent = neg.nombre;
+  document.getElementById('mobilePanelInfo').innerHTML =
+    '📞 '+(neg.telefono||'—')+(neg.whatsapp?' · 📱 '+neg.whatsapp:'')+
+    '<br>📍 '+[neg.distrito,neg.provincia].filter(Boolean).join(', ');
+  document.getElementById('mobileDetEstado').value = neg.estado_crm || 'nuevo';
+  document.getElementById('mobileDetWA').value = neg.whatsapp || '';
+  renderHistorial(nr.historial||[], 'historialM');
+  document.getElementById('mobilePanel').classList.add('open');
 }
-function closeMobilePanel(){ document.getElementById('panelMobile').classList.remove('open'); }
+function closeMobile() { document.getElementById('mobilePanel').classList.remove('open'); }
 
-async function loadHistorial(id){ loadHistorialEl(id,'historial'); }
-async function loadHistorialEl(id,elId){
-  const data=await fetch(`/api/crm/${id}`).then(r=>r.json()).catch(()=>({historial:[]}));
-  const items=data.historial||[];
-  document.getElementById(elId).innerHTML=items.length?items.map(h=>`
-    <div class="hist-item">
-      <div class="hist-ico" style="background:${HIST_C[h.tipo]||'#f1f5f9'}">${HIST_I[h.tipo]||'📌'}</div>
-      <div class="hist-body">
-        <div class="hist-tipo">${h.tipo}${h.usuario?' · '+h.usuario:''}</div>
-        <div class="hist-txt">${h.contenido||''}</div>
-        <div class="hist-ts">${new Date(h.created_at).toLocaleString('es-PE')}</div>
-      </div>
-    </div>`).join(''):'<div style="text-align:center;padding:1rem;color:var(--faint);font-size:12px">Sin historial</div>';
+// ── Historial ─────────────────────────────────────────────────────────────────
+function renderHistorial(items, elId) {
+  var el = document.getElementById(elId);
+  if (!items.length) { el.innerHTML='<div style="text-align:center;padding:1rem;color:var(--faint);font-size:12px">Sin historial</div>'; return; }
+  el.innerHTML = items.map(function(h) {
+    return '<div class="hist-item">' +
+      '<div class="hist-ico" style="background:'+(HIST_C[h.tipo]||'#f1f5f9')+'">'+(HIST_I[h.tipo]||'📌')+'</div>' +
+      '<div class="hist-body">' +
+        '<div class="hist-tipo">'+h.tipo+(h.usuario?' · '+h.usuario:'')+'</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:2px;word-break:break-word">'+(h.contenido||'')+'</div>' +
+        '<div class="hist-ts">'+new Date(h.created_at).toLocaleString('es-PE')+'</div>' +
+      '</div></div>';
+  }).join('');
 }
 
-async function cambiarEstado(){
-  if(!activo)return;
-  await fetch(`/api/negocios/${activo.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado_crm:document.getElementById('detEstado').value})});
-  activo.estado_crm=document.getElementById('detEstado').value; load(); loadHistorial(activo.id);
+// ── Acciones ──────────────────────────────────────────────────────────────────
+async function cambiarEstado() {
+  if (!activo) return;
+  var estado = document.getElementById('detEstado').value;
+  await fetch('/api/negocios/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({estado_crm:estado}) });
+  activo.estado_crm = estado;
+  load();
 }
-async function cambiarEstadoMobile(){
-  if(!activo)return;
-  await fetch(`/api/negocios/${activo.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado_crm:document.getElementById('mobileDetEstado').value})});
-  activo.estado_crm=document.getElementById('mobileDetEstado').value; load();
+async function cambiarEstadoMobile() {
+  if (!activo) return;
+  var estado = document.getElementById('mobileDetEstado').value;
+  await fetch('/api/negocios/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({estado_crm:estado}) });
+  activo.estado_crm = estado;
+  load();
 }
-async function guardarWA(){ if(!activo)return; const wa=document.getElementById('detWA').value.trim(); await fetch(`/api/negocios/${activo.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({whatsapp:wa})}); alert('✅ Guardado'); }
-async function guardarWAMobile(){ if(!activo)return; const wa=document.getElementById('mobileDetWA').value.trim(); await fetch(`/api/negocios/${activo.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({whatsapp:wa})}); alert('✅ Guardado'); }
-async function addNota(){ if(!activo)return; const txt=document.getElementById('notaTxt').value.trim(),tipo=document.getElementById('tipoNota').value; if(!txt)return alert('Escribe una nota'); await fetch(`/api/crm/${activo.id}/comentario`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contenido:txt,tipo})}); document.getElementById('notaTxt').value=''; loadHistorial(activo.id); }
-async function addNotaMobile(){ if(!activo)return; const txt=document.getElementById('notaTxtMobile').value.trim(),tipo=document.getElementById('tipoNotaMobile').value; if(!txt)return alert('Escribe una nota'); await fetch(`/api/crm/${activo.id}/comentario`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contenido:txt,tipo})}); document.getElementById('notaTxtMobile').value=''; loadHistorialEl(activo.id,'historialMobile'); }
-function openDemo(){ if(!activo)return; document.getElementById('demoModal').style.display='flex'; }
-async function guardarDemo(){
-  if(!activo)return;
-  const body={negocio_id:activo.id,titulo:document.getElementById('dTitulo').value||'Demo',fecha_hora:document.getElementById('dFecha').value,tipo:document.getElementById('dTipo').value,enlace:document.getElementById('dEnlace').value,responsable:document.getElementById('dResp').value};
-  if(!body.fecha_hora)return alert('Selecciona fecha y hora');
-  await fetch('/api/demos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  document.getElementById('demoModal').style.display='none';
-  alert('✅ Demo agendada con recordatorio automático por WA');
-  loadHistorial(activo.id);
+async function guardarWA() {
+  if (!activo) return;
+  var wa = document.getElementById('detWA').value.trim();
+  await fetch('/api/negocios/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({whatsapp:wa}) });
+  activo.whatsapp = wa;
+  alert('✅ Número WA guardado');
+  load();
 }
-function irChat(){ if(!activo)return; window.parent.postMessage({nav:'chat',id:activo.id},'*'); closeMobilePanel(); }
-async function initFiltros(){
-  const deps=await fetch('/api/ubigeo/departamentos').then(r=>r.json()).catch(()=>[]);
-  deps.forEach(d=>document.getElementById('fDep').innerHTML+=`<option value="${d}">${d}</option>`);
+async function guardarWAMobile() {
+  if (!activo) return;
+  var wa = document.getElementById('mobileDetWA').value.trim();
+  await fetch('/api/negocios/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({whatsapp:wa}) });
+  activo.whatsapp = wa;
+  alert('✅ Guardado');
+  load();
 }
-initFiltros(); load();
-</script></body></html>
+async function addNota() {
+  if (!activo) return;
+  var txt = document.getElementById('notaTxt').value.trim();
+  var tipo = document.getElementById('tipoNota').value;
+  if (!txt) return alert('Escribe una nota');
+  await fetch('/api/crm/'+activo.id+'/comentario', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({contenido:txt,tipo:tipo}) });
+  document.getElementById('notaTxt').value = '';
+  var nr = await fetch('/api/crm/'+activo.id).then(function(r){return r.json();}).catch(function(){return {};});
+  renderHistorial(nr.historial||[], 'historial');
+}
+async function addNotaM() {
+  if (!activo) return;
+  var txt = document.getElementById('notaTxtM').value.trim();
+  var tipo = document.getElementById('tipoNotaM').value;
+  if (!txt) return alert('Escribe una nota');
+  await fetch('/api/crm/'+activo.id+'/comentario', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({contenido:txt,tipo:tipo}) });
+  document.getElementById('notaTxtM').value = '';
+  var nr = await fetch('/api/crm/'+activo.id).then(function(r){return r.json();}).catch(function(){return {};});
+  renderHistorial(nr.historial||[], 'historialM');
+}
+function openDemo() { if (!activo) return; document.getElementById('demoModal').style.display='flex'; }
+function closeDemoModal() { document.getElementById('demoModal').style.display='none'; }
+async function guardarDemo() {
+  if (!activo) return;
+  var fecha = document.getElementById('dFecha').value;
+  if (!fecha) return alert('Selecciona fecha y hora');
+  var body = { negocio_id:activo.id, titulo:document.getElementById('dTitulo').value||'Demo', fecha_hora:fecha, tipo:document.getElementById('dTipo').value, enlace:document.getElementById('dEnlace').value, responsable:document.getElementById('dResp').value };
+  var r = await fetch('/api/demos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  var d = await r.json();
+  if (d.ok) { closeDemoModal(); alert('✅ Demo agendada con recordatorio automático por WA'); }
+  else alert('Error: '+d.error);
+}
+function irChat() { if (!activo) return; window.parent.postMessage({nav:'chat',id:activo.id},'*'); closeMobile(); }
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function initFiltros() {
+  // Departamentos
+  var deps = await fetch('/api/ubigeo/departamentos').then(function(r){return r.json();}).catch(function(){return [];});
+  var sDep = document.getElementById('fDep');
+  deps.forEach(function(d) { sDep.innerHTML += '<option value="'+d+'">'+d+'</option>'; });
+
+  // Rubros únicos desde la BD
+  var data = await fetch('/api/negocios?limit=1000').then(function(r){return r.json();}).catch(function(){return {rows:[]};});
+  var rubros = [];
+  (data.rows||[]).forEach(function(r){ if(r.rubro_busqueda && rubros.indexOf(r.rubro_busqueda)<0) rubros.push(r.rubro_busqueda); });
+  rubros.sort();
+  var sRubro = document.getElementById('fRubro');
+  rubros.forEach(function(r){ sRubro.innerHTML += '<option value="'+esc(r)+'">'+esc(r)+'</option>'; });
+}
+
+initFiltros();
+load();
+</script>
+</body></html>

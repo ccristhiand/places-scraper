@@ -98,18 +98,45 @@ router.post('/guardar', async (req, res) => {
 // GET /api/negocios
 router.get('/', async (req, res) => {
   try {
-    const { dep, prov, dist, rubro, estado_crm, q, limit = 500, offset = 0 } = req.query;
+    const { dep, prov, dist, rubro, estado_crm, q, sin_numero, limit = 20, offset = 0 } = req.query;
     const where = ['1=1'], vals = [];
-    if (dep)       { where.push('departamento=?');        vals.push(dep); }
-    if (prov)      { where.push('provincia=?');           vals.push(prov); }
-    if (dist)      { where.push('distrito=?');            vals.push(dist); }
-    if (rubro)     { where.push('rubro_busqueda LIKE ?'); vals.push(`%${rubro}%`); }
-    if (estado_crm){ where.push('estado_crm=?');          vals.push(estado_crm); }
-    if (q)         { where.push('(nombre LIKE ? OR telefono LIKE ?)'); vals.push(`%${q}%`, `%${q}%`); }
+    if (dep)        { where.push('departamento=?');        vals.push(dep); }
+    if (prov)       { where.push('provincia=?');           vals.push(prov); }
+    if (dist)       { where.push('distrito=?');            vals.push(dist); }
+    if (rubro)      { where.push('rubro_busqueda LIKE ?'); vals.push(`%${rubro}%`); }
+    if (estado_crm) { where.push('estado_crm=?');          vals.push(estado_crm); }
+    if (q)          { where.push('(nombre LIKE ? OR telefono LIKE ? OR direccion LIKE ?)'); vals.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+    if (sin_numero === '1') {
+      where.push('(telefono IS NULL OR telefono = "") AND (telefono_int IS NULL OR telefono_int = "") AND (whatsapp IS NULL OR whatsapp = "")');
+    }
+    const lim = Math.min(parseInt(limit) || 20, 500);
+    const off = parseInt(offset) || 0;
     const [rows] = await db.execute(
-      `SELECT * FROM negocios WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT ${+limit} OFFSET ${+offset}`, vals);
-    const [[{ total }]] = await db.execute(`SELECT COUNT(*) as total FROM negocios WHERE ${where.join(' AND ')}`, vals);
-    res.json({ ok: true, total, rows });
+      `SELECT * FROM negocios WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT ${lim} OFFSET ${off}`, vals);
+    const [[{ total }]] = await db.execute(
+      `SELECT COUNT(*) as total FROM negocios WHERE ${where.join(' AND ')}`, vals);
+    res.json({ ok: true, total, rows, limit: lim, offset: off });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/negocios/:id
+router.delete('/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  try {
+    await db.execute('DELETE FROM negocios WHERE id=?', [id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/negocios/bulk — eliminar múltiples
+router.post('/eliminar-bulk', async (req, res) => {
+  const { ids } = req.body;
+  if (!ids?.length) return res.status(400).json({ error: 'Sin IDs' });
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    await db.execute(`DELETE FROM negocios WHERE id IN (${placeholders})`, ids);
+    res.json({ ok: true, eliminados: ids.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

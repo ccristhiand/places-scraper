@@ -30,32 +30,58 @@
   <div class="card">
     <div class="card-h"><h3>🚀 Nuevo envío masivo</h3></div>
     <div class="card-b">
+
       <div class="pendientes-box" id="pendientesBox">
         <p>⚠️ <span id="numPendientes">0</span> mensajes pendientes</p>
-        <button class="btn btn-sm" id="btnReintentar" onclick="reintentarPendientes()" style="width:100%;background:#f59e0b;color:#fff;justify-content:center;margin-bottom:6px">🔄 Reintentar pendientes</button>
-        <button onclick="limpiarDuplicados()" style="width:100%;height:28px;background:#fef2f2;border:1px solid #fecaca;color:var(--red);border-radius:6px;font-size:11px;cursor:pointer">🗑️ Limpiar duplicados</button>
+        <button id="btnReintentar" onclick="reintentarPendientes()" style="width:100%;height:32px;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-bottom:6px">🔄 Reintentar pendientes</button>
+        <button onclick="limpiarDuplicados()" style="width:100%;height:28px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Limpiar duplicados</button>
       </div>
-      <div class="field"><label>Campaña / Plantilla</label>
-        <select id="selCampana" onchange="loadPreview()"><option value="">— Selecciona —</option></select>
+
+      <div class="field">
+        <label>Campaña / Plantilla</label>
+        <select id="selCampana" onchange="loadPreview()">
+          <option value="">— Selecciona una campaña —</option>
+        </select>
       </div>
+
       <div id="campPreview" style="display:none;background:#e5ddd5;border-radius:8px;padding:.75rem;margin-bottom:.75rem;font-size:12px;line-height:1.5;white-space:pre-wrap;max-height:80px;overflow-y:auto"></div>
-      <div class="field"><label>Estado CRM</label>
-        <select id="fEstado"><option value="">Todos los estados</option><option value="nuevo">Nuevo</option><option value="contactado">Contactado</option><option value="interesado">Interesado</option></select>
+
+      <div class="field">
+        <label>Estado CRM</label>
+        <select id="fEstado">
+          <option value="">Todos los estados</option>
+          <option value="nuevo">🆕 Nuevo</option>
+          <option value="contactado">📞 Contactado</option>
+          <option value="interesado">⭐ Interesado</option>
+          <option value="propuesta">📄 Propuesta</option>
+        </select>
       </div>
-      <div class="field"><label>Departamento</label>
-        <select id="fDep"><option value="">Todos</option></select>
+
+      <div class="field">
+        <label>Departamento</label>
+        <select id="fDep">
+          <option value="">Todos los departamentos</option>
+        </select>
       </div>
-      <button class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:.75rem" onclick="loadContactos()">🔍 Cargar contactos</button>
-      <div id="warn" class="alert alert-warn">⚠️ Solo contactos con número registrado recibirán mensajes.</div>
-      <div id="alertOk" class="alert alert-ok"></div>
-      <div id="listaContactos" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;display:none">
-        <div style="padding:.5rem .75rem;background:#f8fafc;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px">
+
+      <button onclick="loadContactos()" style="width:100%;height:36px;background:#fff;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:.75rem">🔍 Cargar contactos</button>
+
+      <div id="warn" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.625rem .875rem;font-size:12px;color:#92400e;margin-bottom:.75rem">
+        ⚠️ Algunos contactos no tienen número. Solo se enviará a los que tienen.
+      </div>
+
+      <div id="listaContactos" style="display:none;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:.75rem">
+        <div style="padding:.5rem .75rem;background:#f8fafc;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px;position:sticky;top:0">
           <input type="checkbox" id="selTodos" onchange="togTodos(this.checked)" style="accent-color:var(--accent);width:16px;height:16px">
-          <span id="resumenSel">0 seleccionados</span>
+          <span id="resumenSel" style="font-weight:500">0 seleccionados</span>
         </div>
         <div id="contactItems"></div>
       </div>
-      <button class="btn btn-primary" id="btnEnviar" onclick="iniciarEnvio()" style="width:100%;justify-content:center;margin-top:.75rem" disabled>📤 Iniciar envío masivo</button>
+
+      <button id="btnEnviar" onclick="iniciarEnvio()" disabled
+        style="width:100%;height:40px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer">
+        📤 Iniciar envío masivo
+      </button>
       <p style="font-size:11px;color:var(--faint);text-align:center;margin-top:.5rem">⏱️ 10 seg. entre mensajes para evitar bloqueos</p>
     </div>
   </div>
@@ -64,14 +90,14 @@
 <div class="right">
   <div class="stats">
     <div class="stat"><div class="stat-n" id="sTotal">0</div><div class="stat-l">Total</div></div>
-    <div class="stat"><div class="stat-n" id="sEnv" style="color:var(--green)">0</div><div class="stat-l">Enviados</div></div>
-    <div class="stat"><div class="stat-n" id="sFall" style="color:var(--red)">0</div><div class="stat-l">Fallidos</div></div>
-    <div class="stat"><div class="stat-n" id="sPend" style="color:var(--yellow)">0</div><div class="stat-l">Pendientes</div></div>
+    <div class="stat"><div class="stat-n" id="sEnv" style="color:#16a34a">0</div><div class="stat-l">Enviados</div></div>
+    <div class="stat"><div class="stat-n" id="sFall" style="color:#dc2626">0</div><div class="stat-l">Fallidos</div></div>
+    <div class="stat"><div class="stat-n" id="sPend" style="color:#d97706">0</div><div class="stat-l">Pendientes</div></div>
   </div>
 
   <div class="progress-box" id="progressBox">
     <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
-      <span id="pMsg" style="font-weight:500">Enviando...</span>
+      <span id="pMsg" style="font-weight:500">Preparando...</span>
       <span id="pCount" style="color:var(--muted)"></span>
     </div>
     <div class="bar"><div class="bar-f" id="barF" style="width:0%"></div></div>
@@ -80,191 +106,376 @@
 
   <div class="card">
     <div class="card-h">
-      <h3>📋 Historial</h3>
+      <h3>📋 Historial de envíos</h3>
       <div style="display:flex;gap:6px">
         <select id="hEstado" onchange="loadHistorial()" style="height:26px;border:1px solid var(--border);border-radius:6px;font-size:11px;padding:0 6px">
-          <option value="">Todos</option><option value="enviado">Enviados</option>
-          <option value="fallido">Fallidos</option><option value="pendiente">Pendientes</option>
+          <option value="">Todos</option>
+          <option value="enviado">Enviados</option>
+          <option value="fallido">Fallidos</option>
+          <option value="pendiente">Pendientes</option>
         </select>
-        <button class="btn btn-outline btn-xs" onclick="loadHistorial()">🔄</button>
+        <button onclick="loadHistorial()" style="height:26px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">🔄</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <table><thead><tr><th>Negocio</th><th>Número</th><th>Campaña</th><th>Estado</th><th>Enviado</th></tr></thead>
-      <tbody id="histTbody"></tbody></table>
-      <div id="histEmpty" class="empty" style="display:none"><p>Sin envíos aún</p></div>
+      <table>
+        <thead><tr><th>Negocio</th><th>Número</th><th>Campaña</th><th>Estado</th><th>Enviado</th></tr></thead>
+        <tbody id="histTbody"></tbody>
+      </table>
+      <div id="histEmpty" style="display:none;text-align:center;padding:2rem;color:var(--faint);font-size:13px">Sin envíos aún</div>
     </div>
   </div>
 </div>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
 <script>
-const socket=io();
-let contactosSel=new Set(), totalEnvios=0, enviados=0, fallidos=0;
+// Variables globales con var para evitar errores de hoisting
+var contactosSel = new Set();
+var totalEnvios  = 0;
+var enviados     = 0;
+var fallidos     = 0;
+var _enviandoActivo = false;
+
+// ── Socket.io — carga dinámica opcional ──────────────────────────────────────
+function initSocket() {
+  if (typeof io === 'undefined') {
+    console.warn('Socket.io no disponible — usando polling');
+    setInterval(function() {
+      if (_enviandoActivo) {
+        loadStats();
+        loadHistorial();
+      }
+    }, 4000);
+    return;
+  }
+  try {
+    var sock = io({ transports: ['websocket', 'polling'] });
+    sock.on('envio:progreso',   function(d) { onProgreso(d); });
+    sock.on('envio:completado', function(d) { onCompletado(d); });
+  } catch(e) {
+    console.warn('Socket error:', e.message);
+  }
+}
 
 function onProgreso(d) {
-  var estado=d.estado, nombre=d.nombre, error=d.error;
-  var cls=estado==='enviado'?'log-ok':estado==='fallido'?'log-err':'log-info';
-  logMsg((estado==='enviado'?'✓ ':'✗ ')+nombre+(error?' ('+error+')':''), cls);
-  if(estado==='enviado') enviados++; else if(estado==='fallido') fallidos++;
-  var prog=enviados+fallidos;
-  document.getElementById('barF').style.width=(totalEnvios>0?(prog/totalEnvios*100):0)+'%';
-  document.getElementById('pCount').textContent=prog+' / '+totalEnvios;
-  document.getElementById('sEnv').textContent=enviados;
-  document.getElementById('sFall').textContent=fallidos;
-  document.getElementById('sPend').textContent=Math.max(0,totalEnvios-prog);
+  var cls = d.estado === 'enviado' ? 'log-ok' : d.estado === 'fallido' ? 'log-err' : 'log-info';
+  logMsg((d.estado === 'enviado' ? '✓ ' : '✗ ') + d.nombre + (d.error ? ' (' + d.error + ')' : ''), cls);
+  if (d.estado === 'enviado') enviados++;
+  else if (d.estado === 'fallido') fallidos++;
+  var prog = enviados + fallidos;
+  document.getElementById('barF').style.width = (totalEnvios > 0 ? (prog / totalEnvios * 100) : 0) + '%';
+  document.getElementById('pCount').textContent = prog + ' / ' + totalEnvios;
+  document.getElementById('sEnv').textContent  = enviados;
+  document.getElementById('sFall').textContent  = fallidos;
+  document.getElementById('sPend').textContent  = Math.max(0, totalEnvios - prog);
 }
+
 function onCompletado(d) {
-  logMsg('✅ Envío completado — '+enviados+' enviados, '+fallidos+' fallidos','log-ok');
-  document.getElementById('pMsg').textContent='✅ Completado';
-  document.getElementById('btnEnviar').disabled=false;
-  _enviandoActivo=false;
-  var br=document.getElementById('btnReintentar'); if(br){br.disabled=false;br.textContent='🔄 Reintentar pendientes';}
+  logMsg('✅ Completado — ' + enviados + ' enviados, ' + fallidos + ' fallidos', 'log-ok');
+  document.getElementById('pMsg').textContent = '✅ Completado';
+  document.getElementById('btnEnviar').disabled = false;
+  _enviandoActivo = false;
+  var br = document.getElementById('btnReintentar');
+  if (br) { br.disabled = false; br.textContent = '🔄 Reintentar pendientes'; }
   loadHistorial(); loadStats(); checkPendientes();
 }
 
-async function loadCampanas(){
-  const data=await fetch('/api/campanas').then(r=>r.json()).catch(()=>({rows:[]}));
-  const s=document.getElementById('selCampana');
-  (data.rows||[]).forEach(c=>s.innerHTML+=`<option value="${c.id}" data-msg="${c.mensaje.replace(/"/g,'&quot;')}">${c.nombre}</option>`);
-}
-function loadPreview(){
-  const opt=document.getElementById('selCampana').selectedOptions[0];
-  const box=document.getElementById('campPreview');
-  if(opt?.dataset?.msg){box.textContent=opt.dataset.msg;box.style.display='block';}else box.style.display='none';
-}
-async function loadDeps(){
-  const deps=await fetch('/api/ubigeo/departamentos').then(r=>r.json()).catch(()=>[]);
-  deps.forEach(d=>document.getElementById('fDep').innerHTML+=`<option value="${d}">${d}</option>`);
-}
-async function loadContactos(){
-  var estado=document.getElementById('fEstado').value;
-  var dep=document.getElementById('fDep').value;
-  var url='/api/negocios?limit=500';
-  if(estado) url+='&estado_crm='+encodeURIComponent(estado);
-  if(dep)    url+='&dep='+encodeURIComponent(dep);
-
-  var data=await fetch(url).then(function(r){return r.json();}).catch(function(){return {rows:[]};});
-  var rows=data.rows||[];
-  var conNum=rows.filter(function(r){return r.whatsapp||r.telefono_int||r.telefono;});
-
-  document.getElementById('warn').style.display=rows.length>conNum.length?'block':'none';
-  document.getElementById('listaContactos').style.display='block';
-
-  if(!conNum.length){
-    document.getElementById('contactItems').innerHTML='<div style="text-align:center;padding:1rem;color:#94a3b8;font-size:12px">Sin contactos con número registrado para estos filtros</div>';
-    document.getElementById('btnEnviar').disabled=true;
-    return;
+// ── Cargar campañas ───────────────────────────────────────────────────────────
+async function loadCampanas() {
+  try {
+    var r    = await fetch('/api/campanas');
+    var data = await r.json();
+    var s    = document.getElementById('selCampana');
+    s.innerHTML = '<option value="">— Selecciona una campaña —</option>';
+    (data.rows || []).forEach(function(c) {
+      var opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.nombre;
+      opt.dataset.msg = c.mensaje;
+      s.appendChild(opt);
+    });
+  } catch(e) {
+    console.error('Error cargando campañas:', e);
   }
+}
 
-  document.getElementById('contactItems').innerHTML=conNum.map(function(r){
-    return '<div class="check-item">' +
-      '<input type="checkbox" class="cc" data-id="'+r.id+'" onchange="togC(this)">' +
-      '<span class="name">'+r.nombre+'</span>' +
-      '<span class="tel">'+(r.whatsapp||r.telefono_int||r.telefono||'')+'</span>' +
-    '</div>';
-  }).join('');
+function loadPreview() {
+  var s   = document.getElementById('selCampana');
+  var opt = s.selectedOptions[0];
+  var box = document.getElementById('campPreview');
+  if (opt && opt.dataset.msg) {
+    box.textContent = opt.dataset.msg;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
 
-  contactosSel.clear();
+// ── Cargar departamentos ──────────────────────────────────────────────────────
+async function loadDeps() {
+  try {
+    var r    = await fetch('/api/ubigeo/departamentos');
+    var deps = await r.json();
+    var s    = document.getElementById('fDep');
+    s.innerHTML = '<option value="">Todos los departamentos</option>';
+    deps.forEach(function(d) {
+      var opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d;
+      s.appendChild(opt);
+    });
+  } catch(e) {
+    console.error('Error cargando departamentos:', e);
+  }
+}
+
+// ── Cargar contactos con filtros ──────────────────────────────────────────────
+async function loadContactos() {
+  var estado = document.getElementById('fEstado').value;
+  var dep    = document.getElementById('fDep').value;
+
+  var url = '/api/negocios?limit=500';
+  if (estado) url += '&estado_crm=' + encodeURIComponent(estado);
+  if (dep)    url += '&dep='        + encodeURIComponent(dep);
+
+  logMsg('Cargando contactos...', 'log-info');
+
+  try {
+    var r    = await fetch(url);
+    var data = await r.json();
+    var rows = data.rows || [];
+
+    var conNum = rows.filter(function(r) {
+      return r.whatsapp || r.telefono_int || r.telefono;
+    });
+
+    document.getElementById('warn').style.display = rows.length > conNum.length ? 'block' : 'none';
+    document.getElementById('listaContactos').style.display = 'block';
+
+    if (!conNum.length) {
+      document.getElementById('contactItems').innerHTML =
+        '<div style="text-align:center;padding:1rem;color:#94a3b8;font-size:12px">Sin contactos con número para estos filtros</div>';
+      document.getElementById('btnEnviar').disabled = true;
+      document.getElementById('resumenSel').textContent = '0 encontrados';
+      return;
+    }
+
+    document.getElementById('contactItems').innerHTML = conNum.map(function(r) {
+      return '<div class="check-item">' +
+        '<input type="checkbox" class="cc" data-id="' + r.id + '" onchange="togC(this)">' +
+        '<span class="name">' + esc(r.nombre) + '</span>' +
+        '<span class="tel">' + esc(r.whatsapp || r.telefono_int || r.telefono || '') + '</span>' +
+        '</div>';
+    }).join('');
+
+    contactosSel.clear();
+    document.getElementById('selTodos').checked = false;
+    updResumen();
+    document.getElementById('btnEnviar').disabled = false;
+    logMsg('✓ ' + conNum.length + ' contactos cargados', 'log-ok');
+
+  } catch(e) {
+    logMsg('✗ Error cargando contactos: ' + e.message, 'log-err');
+  }
+}
+
+function togTodos(v) {
+  document.querySelectorAll('.cc').forEach(function(c) {
+    c.checked = v;
+    if (v) contactosSel.add(+c.dataset.id);
+    else   contactosSel.delete(+c.dataset.id);
+  });
   updResumen();
-  document.getElementById('btnEnviar').disabled=false;
 }
-function togTodos(v){document.querySelectorAll('.cc').forEach(c=>{c.checked=v;v?contactosSel.add(+c.dataset.id):contactosSel.delete(+c.dataset.id)});updResumen();}
-function togC(c){c.checked?contactosSel.add(+c.dataset.id):contactosSel.delete(+c.dataset.id);updResumen();}
-function updResumen(){document.getElementById('resumenSel').textContent=contactosSel.size+' seleccionados';}
-
-async function iniciarEnvio(){
-  const campanaId=document.getElementById('selCampana').value;
-  if(!campanaId) return alert('Selecciona una campaña');
-  if(!contactosSel.size) return alert('Selecciona al menos un contacto');
-  if(!confirm('¿Enviar a '+contactosSel.size+' contactos?\n\n⚠️ No cierres esta pestaña hasta que termine.')) return;
-  totalEnvios=contactosSel.size; enviados=0; fallidos=0;
-  document.getElementById('sTotal').textContent=totalEnvios;
-  document.getElementById('sEnv').textContent=0; document.getElementById('sFall').textContent=0; document.getElementById('sPend').textContent=totalEnvios;
-  document.getElementById('progressBox').style.display='block';
-  document.getElementById('logBox').innerHTML='<div class="log-info">⏳ Iniciando envío...</div>';
-  document.getElementById('barF').style.width='0%';
-  document.getElementById('pMsg').textContent='Preparando...';
-  document.getElementById('btnEnviar').disabled=true;
-  let d;
-  try{
-    const r=await fetch('/api/envios/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campana_id:+campanaId,negocio_ids:[...contactosSel]})});
-    d=await r.json();
-  }catch(e){logMsg('✗ Error de red: '+e.message,'log-err');document.getElementById('btnEnviar').disabled=false;return;}
-  if(!d.ok){logMsg('✗ '+d.error,'log-err');document.getElementById('btnEnviar').disabled=false;return;}
-  if(!d.total){logMsg('⚠️ '+(d.msg||'Todos ya recibieron esta campaña'),'log-info');document.getElementById('pMsg').textContent='Sin nuevos';document.getElementById('btnEnviar').disabled=false;return;}
-  totalEnvios=d.total;
-  document.getElementById('sTotal').textContent=totalEnvios;
-  document.getElementById('sPend').textContent=totalEnvios;
-  logMsg('✓ Envío iniciado — '+d.total+' mensajes en cola','log-ok');
-  document.getElementById('pMsg').textContent='Enviando '+d.total+' mensajes...';
-  _enviandoActivo=true;
+function togC(c) {
+  if (c.checked) contactosSel.add(+c.dataset.id);
+  else           contactosSel.delete(+c.dataset.id);
+  updResumen();
+}
+function updResumen() {
+  document.getElementById('resumenSel').textContent = contactosSel.size + ' seleccionados';
+  document.getElementById('btnEnviar').textContent  =
+    contactosSel.size > 0 ? '📤 Enviar a ' + contactosSel.size + ' contactos' : '📤 Iniciar envío masivo';
 }
 
-async function reintentarPendientes(){
-  if(!confirm('¿Reintentar todos los mensajes pendientes?'))return;
-  const btn=document.getElementById('btnReintentar');
-  btn.disabled=true; btn.textContent='⏳ Reintentando...';
-  const stats=await fetch('/api/envios/stats').then(r=>r.json()).catch(()=>({stats:{}}));
-  totalEnvios=+(stats.stats?.pendientes||0); enviados=0; fallidos=0;
-  document.getElementById('sTotal').textContent=totalEnvios;
-  document.getElementById('progressBox').style.display='block';
-  document.getElementById('logBox').innerHTML=`<div class="log-info">🔄 Reintentando ${totalEnvios} pendientes...</div>`;
-  document.getElementById('barF').style.width='0%';
-  document.getElementById('pMsg').textContent='Reintentando pendientes...';
-  const r=await fetch('/api/envios/reintentar-pendientes',{method:'POST'});
-  const d=await r.json();
-  if(!d.ok){alert('Error: '+d.error);btn.disabled=false;btn.textContent='🔄 Reintentar pendientes';}
-  else if(d.total===0){alert('Sin mensajes pendientes reales');btn.disabled=false;btn.textContent='🔄 Reintentar pendientes';checkPendientes();}
+// ── Iniciar envío ─────────────────────────────────────────────────────────────
+async function iniciarEnvio() {
+  var campanaId = document.getElementById('selCampana').value;
+  if (!campanaId)          return alert('Selecciona una campaña primero');
+  if (!contactosSel.size)  return alert('Selecciona al menos un contacto');
+  if (!confirm('¿Enviar a ' + contactosSel.size + ' contactos?\n\n⚠️ No cierres esta pestaña hasta que termine.')) return;
+
+  totalEnvios = contactosSel.size;
+  enviados = 0; fallidos = 0;
+  document.getElementById('sTotal').textContent = totalEnvios;
+  document.getElementById('sEnv').textContent   = 0;
+  document.getElementById('sFall').textContent  = 0;
+  document.getElementById('sPend').textContent  = totalEnvios;
+  document.getElementById('progressBox').style.display = 'block';
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('barF').style.width = '0%';
+  document.getElementById('pMsg').textContent = 'Preparando envío...';
+  document.getElementById('btnEnviar').disabled = true;
+  logMsg('⏳ Iniciando envío a ' + contactosSel.size + ' contactos...', 'log-info');
+
+  try {
+    var r = await fetch('/api/envios/iniciar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ campana_id: +campanaId, negocio_ids: Array.from(contactosSel) })
+    });
+    var d = await r.json();
+
+    if (!d.ok) {
+      logMsg('✗ Error: ' + (d.error || 'desconocido'), 'log-err');
+      document.getElementById('btnEnviar').disabled = false;
+      return;
+    }
+    if (!d.total || d.total === 0) {
+      logMsg('⚠️ ' + (d.msg || 'Todos ya recibieron esta campaña'), 'log-info');
+      document.getElementById('pMsg').textContent = 'Sin contactos nuevos';
+      document.getElementById('btnEnviar').disabled = false;
+      return;
+    }
+
+    totalEnvios = d.total;
+    _enviandoActivo = true;
+    document.getElementById('sTotal').textContent = totalEnvios;
+    document.getElementById('sPend').textContent  = totalEnvios;
+    document.getElementById('pMsg').textContent   = 'Enviando ' + totalEnvios + ' mensajes...';
+    logMsg('✓ Envío iniciado — ' + totalEnvios + ' en cola (10s entre cada uno)', 'log-ok');
+
+  } catch(e) {
+    logMsg('✗ Error de red: ' + e.message, 'log-err');
+    document.getElementById('btnEnviar').disabled = false;
+  }
 }
 
-async function limpiarDuplicados(){
-  if(!confirm('¿Limpiar duplicados de la BD?'))return;
-  const r=await fetch('/api/envios/limpiar-duplicados',{method:'POST'});
-  const d=await r.json();
-  if(d.ok){alert('✅ Limpiados '+d.limpiados+' registros');loadHistorial();loadStats();checkPendientes();}
-  else alert('Error: '+d.error);
+// ── Reintentar pendientes ─────────────────────────────────────────────────────
+async function reintentarPendientes() {
+  if (!confirm('¿Reintentar todos los mensajes pendientes?')) return;
+  var btn = document.getElementById('btnReintentar');
+  btn.disabled = true; btn.textContent = '⏳ Reintentando...';
+
+  try {
+    var statsR = await fetch('/api/envios/stats');
+    var stats  = await statsR.json();
+    totalEnvios = +(stats.stats && stats.stats.pendientes || 0);
+    enviados = 0; fallidos = 0;
+
+    document.getElementById('sTotal').textContent = totalEnvios;
+    document.getElementById('progressBox').style.display = 'block';
+    document.getElementById('logBox').innerHTML = '';
+    document.getElementById('barF').style.width = '0%';
+    document.getElementById('pMsg').textContent = 'Reintentando ' + totalEnvios + ' pendientes...';
+    logMsg('🔄 Reintentando ' + totalEnvios + ' pendientes...', 'log-info');
+
+    var r = await fetch('/api/envios/reintentar-pendientes', { method: 'POST' });
+    var d = await r.json();
+
+    if (!d.ok) {
+      logMsg('✗ ' + d.error, 'log-err');
+      btn.disabled = false; btn.textContent = '🔄 Reintentar pendientes';
+    } else if (d.total === 0) {
+      logMsg('⚠️ Sin pendientes reales', 'log-info');
+      btn.disabled = false; btn.textContent = '🔄 Reintentar pendientes';
+      checkPendientes();
+    } else {
+      _enviandoActivo = true;
+    }
+  } catch(e) {
+    logMsg('✗ Error: ' + e.message, 'log-err');
+    btn.disabled = false; btn.textContent = '🔄 Reintentar pendientes';
+  }
 }
 
-async function checkPendientes(){
-  const data=await fetch('/api/envios/stats').then(r=>r.json()).catch(()=>({stats:{}}));
-  const p=+(data.stats?.pendientes||0);
-  document.getElementById('numPendientes').textContent=p;
-  document.getElementById('pendientesBox').style.display=p>0?'block':'none';
+// ── Limpiar duplicados ────────────────────────────────────────────────────────
+async function limpiarDuplicados() {
+  if (!confirm('¿Limpiar registros duplicados de la BD?')) return;
+  try {
+    var r = await fetch('/api/envios/limpiar-duplicados', { method: 'POST' });
+    var d = await r.json();
+    if (d.ok) {
+      alert('✅ Limpiados ' + d.limpiados + ' registros duplicados');
+      loadHistorial(); loadStats(); checkPendientes();
+    } else alert('Error: ' + d.error);
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
-async function loadHistorial(){
-  const estado=document.getElementById('hEstado').value;
-  const data=await fetch(`/api/envios?limit=100${estado?'&estado='+estado:''}`).then(r=>r.json()).catch(()=>({rows:[]}));
-  const rows=data.rows||[];
-  document.getElementById('histEmpty').style.display=rows.length?'none':'block';
-  document.getElementById('histTbody').innerHTML=rows.map(r=>`<tr>
-    <td style="font-weight:500">${r.nombre}</td>
-    <td style="font-family:monospace;font-size:11px;color:var(--accent)">${r.numero||'—'}</td>
-    <td style="font-size:11px;color:var(--muted)">${r.campana_nombre||'—'}</td>
-    <td><span class="badge ${r.estado==='enviado'?'b-green':r.estado==='fallido'?'b-red':'b-yellow'}">${r.estado}</span></td>
-    <td style="font-size:11px;color:var(--muted)">${r.enviado_at?new Date(r.enviado_at).toLocaleString('es-PE'):'—'}</td>
-  </tr>`).join('');
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function checkPendientes() {
+  try {
+    var r    = await fetch('/api/envios/stats');
+    var data = await r.json();
+    var p    = +(data.stats && data.stats.pendientes || 0);
+    document.getElementById('numPendientes').textContent = p;
+    document.getElementById('pendientesBox').style.display = p > 0 ? 'block' : 'none';
+  } catch(e) {}
 }
-async function loadStats(){
-  const data=await fetch('/api/envios/stats').then(r=>r.json()).catch(()=>({stats:{}}));
-  const s=data.stats||{};
-  document.getElementById('sTotal').textContent=s.total||0;
-  document.getElementById('sEnv').textContent=s.enviados||0;
-  document.getElementById('sFall').textContent=s.fallidos||0;
-  document.getElementById('sPend').textContent=s.pendientes||0;
+
+async function loadStats() {
+  try {
+    var r    = await fetch('/api/envios/stats');
+    var data = await r.json();
+    var s    = data.stats || {};
+    document.getElementById('sTotal').textContent = s.total    || 0;
+    document.getElementById('sEnv').textContent   = s.enviados || 0;
+    document.getElementById('sFall').textContent  = s.fallidos || 0;
+    document.getElementById('sPend').textContent  = s.pendientes || 0;
+  } catch(e) {}
 }
-function logMsg(msg,cls){
-  const log=document.getElementById('logBox');
-  log.innerHTML+='<div class="'+(cls||'log-info')+'">['+new Date().toLocaleTimeString('es-PE')+'] '+msg+'</div>';
-  log.scrollTop=log.scrollHeight;
+
+// ── Historial ─────────────────────────────────────────────────────────────────
+async function loadHistorial() {
+  try {
+    var estado = document.getElementById('hEstado').value;
+    var url    = '/api/envios?limit=100' + (estado ? '&estado=' + estado : '');
+    var r      = await fetch(url);
+    var data   = await r.json();
+    var rows   = data.rows || [];
+
+    document.getElementById('histEmpty').style.display = rows.length ? 'none' : 'block';
+    document.getElementById('histTbody').innerHTML = rows.map(function(r) {
+      var badgeCls = r.estado === 'enviado' ? 'b-green' : r.estado === 'fallido' ? 'b-red' : 'b-yellow';
+      return '<tr>' +
+        '<td style="font-weight:500">' + esc(r.nombre) + '</td>' +
+        '<td style="font-family:monospace;font-size:11px;color:var(--accent)">' + (r.numero || '—') + '</td>' +
+        '<td style="font-size:11px;color:var(--muted)">' + esc(r.campana_nombre || '—') + '</td>' +
+        '<td><span class="badge ' + badgeCls + '">' + r.estado + '</span></td>' +
+        '<td style="font-size:11px;color:var(--muted)">' + (r.enviado_at ? new Date(r.enviado_at).toLocaleString('es-PE') : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  } catch(e) {}
 }
-loadCampanas(); loadDeps(); loadHistorial(); loadStats(); checkPendientes();
-// Cargar socket.io dinámicamente
-var s=document.createElement("script");
-s.src="/socket.io/socket.io.js";
-s.onload=function(){ initSocket(); };
-s.onerror=function(){ console.warn("Socket.io no disponible - usando polling"); initSocket(); };
-document.head.appendChild(s);
-</script></body></html>
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
+function logMsg(msg, cls) {
+  var log = document.getElementById('logBox');
+  var d   = document.createElement('div');
+  d.className = cls || 'log-info';
+  d.textContent = '[' + new Date().toLocaleTimeString('es-PE') + '] ' + msg;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', function() {
+  // Cargar socket.io dinámicamente
+  var script   = document.createElement('script');
+  script.src   = '/socket.io/socket.io.js';
+  script.onload  = function() { initSocket(); };
+  script.onerror = function() { initSocket(); }; // fallback polling
+  document.head.appendChild(script);
+
+  loadCampanas();
+  loadDeps();
+  loadHistorial();
+  loadStats();
+  checkPendientes();
+});
+</script>
+</body></html>
