@@ -145,11 +145,23 @@ async function connect() {
       try {
         if (!msg.key.remoteJid) continue;
         if (msg.key.remoteJid.endsWith('@g.us'))  continue; // ignorar grupos
+        if (msg.key.remoteJid.endsWith('@lid'))   continue; // ignorar IDs internos de WA
         if (isJidBroadcast(msg.key.remoteJid))    continue; // ignorar broadcast
         if (!msg.message)                         continue;
 
         const esMio  = !!msg.key.fromMe;
-        const numero = msg.key.remoteJid.replace('@s.whatsapp.net', '');
+
+        // Obtener número real — si es saliente el número es el destinatario
+        let numero = msg.key.remoteJid
+          .replace('@s.whatsapp.net', '')
+          .replace('@c.us', '');
+
+        // Sanity check: debe ser numérico
+        if (!/^[0-9]+$/.test(numero)) {
+          console.log(`  ↩ JID no numérico ignorado: ${msg.key.remoteJid}`);
+          continue;
+        }
+
         const texto  = extraerTexto(msg);
 
         if (!texto) continue;
