@@ -125,6 +125,7 @@ input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:14px;height
     <table>
       <thead><tr>
         <th style="width:30px"><input type="checkbox" id="chkAll" onchange="togAll(this.checked)"></th>
+        <th style="width:50px;color:var(--faint)">#ID</th>
         <th class="sort" onclick="setSort('nombre')">Nombre <span id="sNombre"></span></th>
         <th>Teléfono / WA</th>
         <th>Ubicación</th>
@@ -345,6 +346,7 @@ async function load() {
     if (selIds.has(r.id)) tr.classList.add('sel');
     tr.innerHTML =
       '<td><input type="checkbox" class="rowchk" data-id="'+r.id+'" '+(selIds.has(r.id)?'checked':'')+' onchange="togSel(this)"></td>' +
+      '<td style="color:var(--faint);font-size:11px;font-family:monospace">#'+r.id+'</td>' +
       '<td><b style="font-size:12px">'+esc(r.nombre)+'</b>' +
         (sinNumero ? '<br><span class="badge b-warn" style="margin-top:2px">⚠️ Sin número</span>' : '') +
       '</td>' +
@@ -374,7 +376,7 @@ async function load() {
     return '<div class="m-card '+(selIds.has(r.id)?'sel':'')+'" onclick="selRowMobile('+r.id+')">' +
       '<input type="checkbox" class="rowchk" data-id="'+r.id+'" '+(selIds.has(r.id)?'checked':'')+' onchange="togSel(this);event.stopPropagation()" style="margin-top:2px">' +
       '<div class="m-card-info">' +
-        '<div class="m-card-name">'+esc(r.nombre)+'</div>' +
+        '<div class="m-card-name">'+esc(r.nombre)+' <span style="font-size:10px;color:var(--faint);font-family:monospace">#'+r.id+'</span></div>' +
         '<div class="m-card-sub">📍 '+esc([r.distrito,r.provincia].filter(Boolean).join(', ')||'—')+'</div>' +
         '<div class="m-card-meta">' +
           (r.whatsapp ? '<span style="font-size:11px;color:#22c55e">📱 '+esc(r.whatsapp)+'</span>' : '') +
