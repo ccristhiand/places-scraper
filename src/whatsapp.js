@@ -12,65 +12,82 @@ const fs     = require('fs');
 const db     = require('./db');
 
 const AUTH_DIR = path.join(__dirname, '../.wa_auth');
-let sock             = null;
-let io               = null;
-let waStatus         = 'desconectado';
+let sock              = null;
+let io                = null;
+let waStatus          = 'desconectado';
 let reconnectAttempts = 0;
-let lastQR           = null;
+let lastQR            = null;
 
 function setIO(socketIO) { io = socketIO; }
 function getStatus()     { return waStatus; }
 function getQR()         { return lastQR; }
 function emit(event, data) { if (io) io.emit(event, data); }
 
-function normalizarNumero(tel) {
-  if (!tel) return '';
-  let n = tel.replace(/[^0-9]/g, '');
-  if (n.startsWith('51') && n.length === 11) n = n.slice(2);
-  return n;
+// Extraer JID limpio (número o lid sin sufijo)
+function extraerJID(jid) {
+  if (!jid) return null;
+  return jid.replace('@s.whatsapp.net','').replace('@c.us','').replace('@lid','');
 }
 
-async function buscarNegocioPorNumero(numero) {
-  const normalizado = normalizarNumero(numero);
-  const con51       = '51' + normalizado;
-  const ultimos9    = normalizado.slice(-9);
+// Buscar negocio por número real O por wa_jid (LID guardado)
+async function buscarNegocio(jid, numero) {
   try {
-    const [rows] = await db.execute(`
-      SELECT id, nombre FROM negocios
-      WHERE REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),'+',''),' ',''),'-','')     IN (?,?,?)
-         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono_int,''),'+',''),' ',''),'-','') IN (?,?,?)
-         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono,''),'+',''),' ',''),'-','')     IN (?,?,?)
-      LIMIT 1
-    `, [con51,normalizado,ultimos9, con51,normalizado,ultimos9, con51,normalizado,ultimos9]);
-    if (rows[0]) console.log('  → Negocio encontrado:', rows[0].nombre);
-    else         console.log('  → Sin negocio para número:', numero, '/ norm:', normalizado);
-    return rows[0] || null;
+    const jidLimpio = extraerJID(jid);
+
+    // 1. Buscar por wa_jid (LID ya conocido)
+    if (jidLimpio) {
+      const [r1] = await db.execute(
+        'SELECT id, nombre FROM negocios WHERE wa_jid=? LIMIT 1',
+        [jidLimpio]
+      );
+      if (r1[0]) { console.log('  → Por wa_jid:', r1[0].nombre); return r1[0]; }
+    }
+
+    // 2. Buscar por número real si lo tenemos
+    if (numero && /^[0-9]+$/.test(numero) && numero.length >= 8) {
+      const numCorto = numero.startsWith('51') ? numero.slice(2) : numero;
+      const numLargo = numero.startsWith('51') ? numero : '51' + numero;
+      const [r2] = await db.execute(`
+        SELECT id, nombre FROM negocios
+        WHERE REPLACE(REPLACE(COALESCE(whatsapp,''),'+',''),' ','')     IN (?,?,?)
+           OR REPLACE(REPLACE(COALESCE(telefono_int,''),'+',''),' ','') IN (?,?,?)
+           OR REPLACE(REPLACE(COALESCE(telefono,''),'+',''),' ','')     IN (?,?,?)
+        LIMIT 1
+      `, [numLargo,numCorto,numero, numLargo,numCorto,numero, numLargo,numCorto,numero]);
+      if (r2[0]) {
+        console.log('  → Por número:', r2[0].nombre);
+        // Guardar el JID para próximas búsquedas
+        if (jidLimpio) {
+          await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [jidLimpio, r2[0].id]);
+        }
+        return r2[0];
+      }
+    }
+
+    console.log('  → Sin negocio para jid:', jid, 'numero:', numero);
+    return null;
   } catch(e) {
     console.error('  → Error buscando negocio:', e.message);
     return null;
   }
 }
 
-// Extraer texto de cualquier tipo de mensaje
 function extraerTexto(msg) {
   const m = msg.message;
   if (!m) return null;
-
-  if (m.conversation)                      return m.conversation;
-  if (m.extendedTextMessage?.text)         return m.extendedTextMessage.text;
-  if (m.imageMessage?.caption)             return m.imageMessage.caption || '📷 [imagen]';
-  if (m.videoMessage?.caption)             return m.videoMessage.caption || '🎥 [video]';
-  if (m.documentMessage?.caption)          return m.documentMessage.caption || '📄 [documento]';
-  if (m.documentMessage)                   return '📄 [documento]';
-  if (m.imageMessage)                      return '📷 [imagen]';
-  if (m.videoMessage)                      return '🎥 [video]';
-  if (m.audioMessage)                      return '🎵 [audio]';
-  if (m.stickerMessage)                    return '🎉 [sticker]';
-  if (m.reactionMessage)                   return `${m.reactionMessage.text||'👍'} [reacción]`;
-  if (m.locationMessage)                   return '📍 [ubicación]';
-  if (m.contactMessage)                    return '👤 [contacto]';
-  if (m.buttonsResponseMessage?.selectedDisplayText) return m.buttonsResponseMessage.selectedDisplayText;
-  if (m.listResponseMessage?.title)        return m.listResponseMessage.title;
+  if (m.conversation)                return m.conversation;
+  if (m.extendedTextMessage?.text)   return m.extendedTextMessage.text;
+  if (m.imageMessage?.caption)       return m.imageMessage.caption || '📷 [imagen]';
+  if (m.videoMessage?.caption)       return m.videoMessage.caption || '🎥 [video]';
+  if (m.documentMessage?.caption)    return m.documentMessage.caption || '📄 [documento]';
+  if (m.documentMessage)             return '📄 [documento]';
+  if (m.imageMessage)                return '📷 [imagen]';
+  if (m.videoMessage)                return '🎥 [video]';
+  if (m.audioMessage)                return '🎵 [audio]';
+  if (m.stickerMessage)              return '🎉 [sticker]';
+  if (m.reactionMessage)             return (m.reactionMessage.text || '👍') + ' [reacción]';
+  if (m.locationMessage)             return '📍 [ubicación]';
+  if (m.contactMessage)              return '👤 [contacto]';
   return '[mensaje]';
 }
 
@@ -85,15 +102,13 @@ async function connect() {
 
   sock = makeWASocket({
     version,
-    auth:                  state,
-    logger:                pino({ level: 'silent' }),
-    printQRInTerminal:     true,
-    browser:               ['Places CRM', 'Chrome', '1.0'],
-    connectTimeoutMs:      60000,
-    keepAliveIntervalMs:   25000,
-    retryRequestDelayMs:   2000,
-    // Importante: recibir mensajes propios (enviados desde el celular)
-    shouldIgnoreJid:       jid => isJidBroadcast(jid),
+    auth:                state,
+    logger:              pino({ level: 'silent' }),
+    printQRInTerminal:   false,
+    browser:             ['Places CRM', 'Chrome', '1.0'],
+    connectTimeoutMs:    60000,
+    keepAliveIntervalMs: 25000,
+    retryRequestDelayMs: 2000,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -118,16 +133,15 @@ async function connect() {
     if (connection === 'close') {
       const code      = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
-      console.log(`⚠️ Conexión cerrada. Código: ${code}`);
+      console.log('⚠️ Conexión cerrada. Código:', code);
       if (loggedOut) {
-        console.log('❌ Sesión cerrada — escanea QR nuevamente');
         waStatus = 'desconectado';
         emit('wa:status', { status: 'desconectado' });
         if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
       } else {
         reconnectAttempts++;
         const delay = Math.min(3000 * reconnectAttempts, 30000);
-        console.log(`🔄 Reconectando en ${delay/1000}s (intento ${reconnectAttempts})...`);
+        console.log('🔄 Reconectando en', delay/1000, 's...');
         waStatus = 'conectando';
         emit('wa:status', { status: 'conectando' });
         setTimeout(connect, delay);
@@ -135,112 +149,78 @@ async function connect() {
     }
   });
 
-  // ── Todos los mensajes: entrantes Y enviados desde el celular ────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
       try {
-        if (!msg.key.remoteJid) continue;
-        if (msg.key.remoteJid.endsWith('@g.us')) continue; // ignorar grupos
-        if (isJidBroadcast(msg.key.remoteJid))  continue; // ignorar broadcast
-        if (!msg.message)                        continue;
+        const jid = msg.key.remoteJid;
+        if (!jid) continue;
+        if (jid.endsWith('@g.us')) continue;
+        if (isJidBroadcast(jid))  continue;
+        if (!msg.message)         continue;
 
         const esMio = !!msg.key.fromMe;
-        const jid   = msg.key.remoteJid;
+        const jidLimpio = extraerJID(jid);
 
-        // Resolver número real desde el mensaje
-        // WA multi-dispositivo puede entregar @lid en vez de @s.whatsapp.net
+        // Número real si viene en formato normal
         let numero = null;
-
         if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@c.us')) {
-          // Formato normal — extraer número directo
-          numero = jid.replace('@s.whatsapp.net','').replace('@c.us','');
-        } else if (jid.endsWith('@lid')) {
-          // LID — intentar obtener número real desde los metadatos del mensaje
-          numero = msg.verifiedBizAccount ||
-                   msg.message?.extendedTextMessage?.contextInfo?.participant?.replace('@s.whatsapp.net','') ||
-                   null;
-
-          // Si no hay metadata, buscar en el pushName o notifyName
-          if (!numero && msg.pushName) {
-            console.log(`  ↩ @lid sin número real, pushName: ${msg.pushName} — guardando con JID`);
-            numero = jid; // guardar como fallback para no perder el mensaje
-          }
-
-          if (!numero) {
-            console.log(`  ↩ @lid sin número resoluble, ignorando: ${jid}`);
-            continue;
-          }
-        } else {
-          console.log(`  ↩ JID desconocido ignorado: ${jid}`);
-          continue;
+          numero = jidLimpio;
         }
-
-        // Limpiar número
-        numero = String(numero).replace(/[^0-9]/g, '');
-        if (numero.length < 7) { console.log(`  ↩ Número muy corto: ${numero}`); continue; }
+        // Si es @lid intentar sacar número de pushName o contextInfo
+        // pero igual guardamos con jidLimpio como identificador
 
         const texto = extraerTexto(msg);
-
         if (!texto) continue;
 
-        console.log(`${esMio ? '📤 Enviado' : '📩 Recibido'} ${esMio ? 'a' : 'de'} ${numero}: ${texto.substring(0,60)}`);
+        console.log((esMio ? '📤 Enviado a' : '📩 Recibido de'), jidLimpio, ':', texto.substring(0,50));
 
-        // Verificar duplicado por wa_id
+        // Deduplicar
         if (msg.key.id) {
           const [[existe]] = await db.execute(
-            'SELECT id FROM chat_mensajes WHERE wa_id=? LIMIT 1',
-            [msg.key.id]
+            'SELECT id FROM chat_mensajes WHERE wa_id=? LIMIT 1', [msg.key.id]
           );
-          if (existe) {
-            console.log(`  ↩ Duplicado ignorado`);
-            continue;
-          }
+          if (existe) { console.log('  ↩ Duplicado'); continue; }
         }
 
-        // Buscar negocio por número
-        const negocio   = await buscarNegocioPorNumero(numero);
+        // Buscar negocio por JID o número
+        const negocio   = await buscarNegocio(jid, numero);
         const negocioId = negocio?.id || null;
-
         const direccion = esMio ? 'saliente' : 'entrante';
 
-        // Guardar en BD
-        console.log(`  → Guardando ${direccion} — negocio_id=${negocioId}, numero=${numero}`);
+        // Guardar con jidLimpio como numero (identificador único del contacto)
+        const numeroGuardar = numero || jidLimpio;
         await db.execute(
           'INSERT INTO chat_mensajes (negocio_id, numero, direccion, contenido, wa_id) VALUES (?,?,?,?,?)',
-          [negocioId, numero, direccion, texto, msg.key.id || null]
+          [negocioId, numeroGuardar, direccion, texto, msg.key.id || null]
         );
-        console.log(`  ✓ Guardado OK`);
+        console.log('  ✓ Guardado — negocio:', negocio?.nombre || 'sin asociar');
 
-        // Emitir en tiempo real al panel
-        if (!esMio) {
-          emit('wa:mensaje_entrante', {
-            numero,
-            texto,
-            negocioId,
-            negocioNombre: negocio?.nombre || numero,
-            ts: new Date()
-          });
-        } else {
-          emit('wa:mensaje_saliente', {
-            numero,
-            texto,
-            negocioId,
-            ts: new Date()
-          });
-        }
+        // Emitir en tiempo real
+        const evData = { jid: jidLimpio, numero: numeroGuardar, texto, negocioId, negocioNombre: negocio?.nombre || jidLimpio, ts: new Date() };
+        emit(esMio ? 'wa:mensaje_saliente' : 'wa:mensaje_entrante', evData);
 
       } catch(e) {
-        console.error('  ✗ Error procesando mensaje:', e.message);
+        console.error('  ✗ Error:', e.message);
       }
     }
   });
 }
 
+// Enviar mensaje — acepta número real O jid/lid
 async function enviarMensaje({ numero, texto, imagenPath }) {
   if (!sock || waStatus !== 'conectado') throw new Error('WhatsApp no conectado');
-  const jid = numero.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+
+  let jid;
+  // Si tiene @, es un JID completo o lid
+  if (numero.includes('@')) {
+    jid = numero;
+  } else {
+    // Número normal → convertir a JID
+    jid = numero.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+  }
+
   if (imagenPath && fs.existsSync(imagenPath)) {
     await sock.sendMessage(jid, { image: { url: imagenPath }, caption: texto || '' });
   } else {
@@ -252,8 +232,7 @@ async function desconectar() {
   try { if (sock) await sock.logout(); } catch(_) {}
   if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
   waStatus = 'desconectado';
-  sock     = null;
-  lastQR   = null;
+  sock = null; lastQR = null;
   emit('wa:status', { status: 'desconectado' });
 }
 
