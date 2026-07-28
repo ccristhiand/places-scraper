@@ -24,6 +24,23 @@
   .stats{grid-template-columns:repeat(2,1fr)}
 }
 </style></head><body>
+
+<!-- Banner persistencia envío en curso -->
+<div id="enCursoBanner" style="display:none;background:#fffbeb;border-bottom:2px solid #fde68a;padding:.75rem 1rem">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="font-weight:700;color:#92400e">⏳ Envío en curso:</span>
+    <span style="color:#64748b">Campaña: <b id="ecCampana">—</b></span>
+    <span style="color:#16a34a">✓ <b id="ecEnviados">0</b> enviados</span>
+    <span style="color:#d97706">⏳ <b id="ecPendientes">0</b> pendientes</span>
+    <span style="color:#dc2626">✗ <b id="ecFallidos">0</b> fallidos</span>
+    <div style="flex:1;min-width:100px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">
+      <div id="ecBar" style="height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:3px;width:0%"></div>
+    </div>
+    <b id="ecPct" style="color:#2563eb">0%</b>
+    <button onclick="document.getElementById('enCursoBanner').style.display='none'" style="height:24px;padding:0 8px;border:1px solid #e2e8f0;border-radius:5px;background:#fff;font-size:11px;cursor:pointer">✕</button>
+  </div>
+</div>
+
 <div class="layout">
 
 <div class="left">
@@ -64,6 +81,16 @@
         </select>
       </div>
 
+      <div class="field">
+        <label>Estado CRM después del envío</label>
+        <select id="fDestino" style="height:36px;border:1px solid var(--border);border-radius:8px;font-size:13px;padding:0 10px">
+          <option value="sin_cambio">— Sin cambio (mantener estado actual) —</option>
+          <option value="contactado">📞 Mover a Contactado</option>
+          <option value="interesado">⭐ Mover a Interesado</option>
+          <option value="propuesta">📄 Mover a Propuesta</option>
+          <option value="descartado">❌ Mover a Descartado</option>
+        </select>
+      </div>
       <button onclick="loadContactos()" style="width:100%;height:36px;background:#fff;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:.75rem">🔍 Cargar contactos</button>
 
       <div id="warn" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.625rem .875rem;font-size:12px;color:#92400e;margin-bottom:.75rem">
@@ -322,7 +349,7 @@ async function iniciarEnvio() {
     var r = await fetch('/api/envios/iniciar', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ campana_id: +campanaId, negocio_ids: Array.from(contactosSel) })
+      body:    JSON.stringify({ campana_id: +campanaId, negocio_ids: Array.from(contactosSel), estado_destino: document.getElementById('fDestino').value })
     });
     var d = await r.json();
 
@@ -462,6 +489,48 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── Persistencia — recuperar estado al volver ────────────────────────────────
+async function checkEnCurso() {
+  try {
+    var r    = await fetch('/api/envios/en-curso');
+    var data = await r.json();
+    if (!data.ok) return;
+
+    // Mostrar banner si hay envío en curso o pendientes recientes
+    if (data.pendientes > 0) {
+      var banner = document.getElementById('enCursoBanner');
+      if (banner) {
+        var pct = data.enviados + data.fallidos > 0
+          ? Math.round((data.enviados+data.fallidos)/(data.enviados+data.fallidos+data.pendientes)*100)
+          : 0;
+        document.getElementById('ecCampana').textContent  = data.campana  || 'campaña';
+        document.getElementById('ecEnviados').textContent = data.enviados || 0;
+        document.getElementById('ecPendientes').textContent = data.pendientes || 0;
+        document.getElementById('ecFallidos').textContent = data.fallidos || 0;
+        document.getElementById('ecPct').textContent = pct + '%';
+        document.getElementById('ecBar').style.width = pct + '%';
+        banner.style.display = 'block';
+
+        // Si hay activo, mostrar el progressBox también
+        if (data.activo) {
+          totalEnvios = data.enviados + data.pendientes + data.fallidos;
+          enviados    = data.enviados;
+          fallidos    = data.fallidos;
+          document.getElementById('progressBox').style.display = 'block';
+          document.getElementById('barF').style.width = pct + '%';
+          document.getElementById('pMsg').textContent = 'Envío en curso — ' + data.campana;
+          document.getElementById('pCount').textContent = (enviados+fallidos) + ' / ' + totalEnvios;
+          document.getElementById('sTotal').textContent = totalEnvios;
+          document.getElementById('sEnv').textContent   = enviados;
+          document.getElementById('sFall').textContent  = fallidos;
+          document.getElementById('sPend').textContent  = data.pendientes;
+          _enviandoActivo = true;
+        }
+      }
+    }
+  } catch(e) {}
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load', function() {
   // Cargar socket.io dinámicamente
@@ -476,6 +545,7 @@ window.addEventListener('load', function() {
   loadHistorial();
   loadStats();
   checkPendientes();
+  checkEnCurso(); // recuperar estado persistente
 });
 </script>
 </body></html>

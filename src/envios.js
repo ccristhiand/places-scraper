@@ -25,21 +25,17 @@ function procesarVariables(texto, negocio) {
     .replace(/{{departamento}}/gi, negocio.departamento  || '');
 }
 
-// Al iniciar el servidor limpiar cualquier pendiente trabado
-// (si el proceso anterior se cayó, los pendientes quedan huérfanos)
 let enviandoAhora = false;
 
-async function resetPendientesTrabados() {
+// Limpiar pendientes trabados al iniciar
+setTimeout(async () => {
   try {
-    // Pendientes de más de 2 horas se consideran trabados
     await db.execute(`
       UPDATE envios SET estado='fallido', error_msg='Proceso interrumpido — reintenta'
-      WHERE estado='pendiente'
-        AND created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)
+      WHERE estado='pendiente' AND created_at < DATE_SUB(NOW(), INTERVAL 3 HOUR)
     `);
-  } catch(e) { /* ignorar */ }
-}
-setTimeout(resetPendientesTrabados, 3000);
+  } catch(e) {}
+}, 3000);
 
 // GET /api/envios
 router.get('/', async (req, res) => {
@@ -74,14 +70,34 @@ router.get('/stats', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/envios/en-curso — persistencia: saber si hay envío activo y cuánto va
+router.get('/en-curso', async (req, res) => {
+  try {
+    const [[pend]] = await db.execute(`SELECT COUNT(*) as total FROM envios WHERE estado='pendiente'`);
+    const [[env]]  = await db.execute(`SELECT COUNT(*) as total FROM envios WHERE estado='enviado' AND enviado_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)`);
+    const [[fall]] = await db.execute(`SELECT COUNT(*) as total FROM envios WHERE estado='fallido' AND created_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)`);
+    const [[camp]] = await db.execute(`
+      SELECT c.nombre as campana_nombre, e.estado_destino
+      FROM envios e LEFT JOIN campanas c ON c.id=e.campana_id
+      WHERE e.estado='pendiente' ORDER BY e.id ASC LIMIT 1
+    `);
+    res.json({
+      ok: true,
+      activo: enviandoAhora,
+      pendientes: pend.total || 0,
+      enviados:   env.total  || 0,
+      fallidos:   fall.total || 0,
+      campana:    camp?.campana_nombre || null,
+      estado_destino: camp?.estado_destino || null
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/envios/iniciar
 router.post('/iniciar', async (req, res) => {
-  if (enviandoAhora) {
-    // Forzar reset si llevan más de 30 min
-    enviandoAhora = false;
-  }
+  enviandoAhora = false; // reset forzado
 
-  const { campana_id, negocio_ids } = req.body;
+  const { campana_id, negocio_ids, estado_destino } = req.body;
   if (!campana_id || !negocio_ids?.length) return res.status(400).json({ error: 'Faltan datos' });
 
   try {
@@ -90,7 +106,6 @@ router.post('/iniciar', async (req, res) => {
 
     const aEnviar = [];
     for (const nid of negocio_ids) {
-      // Saltar si ya fue enviado exitosamente
       const [[yaEnviado]] = await db.execute(
         'SELECT id FROM envios WHERE negocio_id=? AND campana_id=? AND estado="enviado" LIMIT 1',
         [nid, campana_id]
@@ -103,54 +118,46 @@ router.post('/iniciar', async (req, res) => {
       const numero = limpiarNumero(n.whatsapp || n.telefono_int || n.telefono);
       const msg    = procesarVariables(campana.mensaje, n);
 
-      // Evitar duplicados pendientes
       const [[pendExiste]] = await db.execute(
         'SELECT id FROM envios WHERE negocio_id=? AND campana_id=? AND estado="pendiente" LIMIT 1',
         [nid, campana_id]
       );
 
       if (!pendExiste) {
+        // Guardar estado_destino junto con el registro de envío
         await db.execute(
-          'INSERT INTO envios (campana_id,negocio_id,numero,mensaje_final,estado) VALUES (?,?,?,?,?)',
-          [campana_id, nid, numero, msg, 'pendiente']
+          'INSERT INTO envios (campana_id,negocio_id,numero,mensaje_final,estado,estado_destino) VALUES (?,?,?,?,?,?)',
+          [campana_id, nid, numero, msg, 'pendiente', estado_destino || null]
         );
       }
       aEnviar.push(nid);
     }
 
-    if (!aEnviar.length) return res.json({ ok: true, total: 0, msg: 'Todos ya fueron enviados' });
+    if (!aEnviar.length) return res.json({ ok: true, total: 0, msg: 'Todos ya fueron enviados anteriormente' });
 
-    enviarEnBackground(campana, aEnviar);
+    enviarEnBackground(campana, aEnviar, estado_destino);
     res.json({ ok: true, total: aEnviar.length });
   } catch (e) {
-    console.error('Error iniciar envio:', e.message);
+    console.error('Error iniciar:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // POST /api/envios/reintentar-pendientes
 router.post('/reintentar-pendientes', async (req, res) => {
-  enviandoAhora = false; // reset forzado
-
+  enviandoAhora = false;
   try {
-    // Limpiar duplicados: si hay enviado Y pendiente para mismo negocio+campaña, marcar pendiente como fallido
     await db.execute(`
       UPDATE envios e1
       SET e1.estado='fallido', e1.error_msg='Ya enviado en intento anterior'
       WHERE e1.estado='pendiente'
         AND EXISTS (
-          SELECT 1 FROM (
-            SELECT id FROM envios
-            WHERE negocio_id=e1.negocio_id
-              AND campana_id=e1.campana_id
-              AND estado='enviado'
-          ) tmp
+          SELECT 1 FROM (SELECT id FROM envios WHERE negocio_id=e1.negocio_id AND campana_id=e1.campana_id AND estado='enviado') tmp
         )
     `);
 
-    // Tomar pendientes reales (uno por negocio+campaña, el más reciente)
     const [pendientes] = await db.execute(`
-      SELECT e.id, e.numero, e.mensaje_final, e.campana_id, e.negocio_id,
+      SELECT e.id, e.numero, e.mensaje_final, e.campana_id, e.negocio_id, e.estado_destino,
              c.mensaje, c.imagen_url,
              n.nombre, n.whatsapp, n.telefono_int, n.telefono,
              n.distrito, n.provincia, n.departamento
@@ -158,40 +165,23 @@ router.post('/reintentar-pendientes', async (req, res) => {
       JOIN negocios n ON n.id = e.negocio_id
       LEFT JOIN campanas c ON c.id = e.campana_id
       WHERE e.estado = 'pendiente'
-        AND e.id = (
-          SELECT MAX(e2.id) FROM envios e2
-          WHERE e2.negocio_id = e.negocio_id
-            AND e2.campana_id = e.campana_id
-            AND e2.estado = 'pendiente'
-        )
+        AND e.id = (SELECT MAX(e2.id) FROM envios e2 WHERE e2.negocio_id=e.negocio_id AND e2.campana_id=e.campana_id AND e2.estado='pendiente')
       ORDER BY e.id ASC
     `);
 
     if (!pendientes.length) return res.json({ ok: true, total: 0, msg: 'Sin pendientes' });
-
     reintentarEnBackground(pendientes);
     res.json({ ok: true, total: pendientes.length });
-  } catch (e) {
-    console.error('Error reintentar:', e.message);
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/envios/limpiar-duplicados
 router.post('/limpiar-duplicados', async (req, res) => {
   try {
     const [r] = await db.execute(`
-      UPDATE envios e1
-      SET e1.estado='fallido', e1.error_msg='Duplicado limpiado'
+      UPDATE envios e1 SET e1.estado='fallido', e1.error_msg='Duplicado limpiado'
       WHERE e1.estado='pendiente'
-        AND EXISTS (
-          SELECT 1 FROM (
-            SELECT id FROM envios
-            WHERE negocio_id=e1.negocio_id
-              AND campana_id=e1.campana_id
-              AND estado='enviado'
-          ) tmp
-        )
+        AND EXISTS (SELECT 1 FROM (SELECT id FROM envios WHERE negocio_id=e1.negocio_id AND campana_id=e1.campana_id AND estado='enviado') tmp)
     `);
     res.json({ ok: true, limpiados: r.affectedRows || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -199,7 +189,7 @@ router.post('/limpiar-duplicados', async (req, res) => {
 
 // ── Background workers ────────────────────────────────────────────────────────
 
-async function enviarEnBackground(campana, negocio_ids) {
+async function enviarEnBackground(campana, negocio_ids, estado_destino) {
   enviandoAhora = true;
   const io = global.io;
   const imagenPath = campana.imagen_url ? path.join(__dirname, '../../', campana.imagen_url) : null;
@@ -207,10 +197,8 @@ async function enviarEnBackground(campana, negocio_ids) {
   for (const nid of negocio_ids) {
     try {
       const [[envio]] = await db.execute(
-        `SELECT e.*, n.nombre FROM envios e
-         JOIN negocios n ON n.id=e.negocio_id
-         WHERE e.negocio_id=? AND e.campana_id=? AND e.estado='pendiente'
-         ORDER BY e.id DESC LIMIT 1`,
+        `SELECT e.*, n.nombre FROM envios e JOIN negocios n ON n.id=e.negocio_id
+         WHERE e.negocio_id=? AND e.campana_id=? AND e.estado='pendiente' ORDER BY e.id DESC LIMIT 1`,
         [nid, campana.id]
       );
       if (!envio) continue;
@@ -223,17 +211,21 @@ async function enviarEnBackground(campana, negocio_ids) {
 
       await wa.enviarMensaje({ numero: envio.numero, texto: envio.mensaje_final, imagenPath });
       await db.execute('UPDATE envios SET estado="enviado",enviado_at=NOW() WHERE id=?', [envio.id]);
-      await db.execute(
-        'INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
-        [nid, envio.numero, 'saliente', envio.mensaje_final]
-      );
-      await db.execute(
-        'INSERT INTO crm_historial (negocio_id,tipo,contenido) VALUES (?,?,?)',
-        [nid, 'mensaje', `Enviado: ${campana.nombre}`]
-      );
+      await db.execute('INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
+        [nid, envio.numero, 'saliente', envio.mensaje_final]);
+      await db.execute('INSERT INTO crm_historial (negocio_id,tipo,contenido) VALUES (?,?,?)',
+        [nid, 'mensaje', `Enviado: ${campana.nombre}`]);
+
+      // Cambiar estado CRM si se especificó uno
+      const destino = estado_destino || envio.estado_destino;
+      if (destino && destino !== 'sin_cambio') {
+        await db.execute('UPDATE negocios SET estado_crm=?, updated_at=NOW() WHERE id=?', [destino, nid]);
+        await db.execute('INSERT INTO crm_historial (negocio_id,tipo,contenido) VALUES (?,?,?)',
+          [nid, 'estado', `Estado movido a "${destino}" tras envío de campaña`]);
+      }
 
       if (io) io.emit('envio:progreso', { id: envio.id, estado: 'enviado', nombre: envio.nombre });
-      console.log(`✓ Enviado a ${envio.nombre} (${envio.numero})`);
+      console.log(`✓ Enviado a ${envio.nombre}`);
       await sleep(DELAY);
 
     } catch (e) {
@@ -254,7 +246,7 @@ async function enviarEnBackground(campana, negocio_ids) {
 
   enviandoAhora = false;
   if (io) io.emit('envio:completado', { total: negocio_ids.length });
-  console.log(`✅ Envío completado — ${negocio_ids.length} procesados`);
+  console.log(`✅ Envío completado`);
 }
 
 async function reintentarEnBackground(pendientes) {
@@ -269,23 +261,23 @@ async function reintentarEnBackground(pendientes) {
         if (io) io.emit('envio:progreso', { id: envio.id, estado: 'fallido', nombre: envio.nombre, error: 'Sin número' });
         continue;
       }
-
       const imagenPath = envio.imagen_url ? path.join(__dirname, '../../', envio.imagen_url) : null;
       const texto = envio.mensaje_final || procesarVariables(envio.mensaje || '', envio);
 
       await wa.enviarMensaje({ numero, texto, imagenPath });
       await db.execute('UPDATE envios SET estado="enviado",enviado_at=NOW() WHERE id=?', [envio.id]);
-      await db.execute(
-        'INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
-        [envio.negocio_id, numero, 'saliente', texto]
-      );
+      await db.execute('INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
+        [envio.negocio_id, numero, 'saliente', texto]);
+
+      // Cambiar estado CRM si aplica
+      if (envio.estado_destino && envio.estado_destino !== 'sin_cambio') {
+        await db.execute('UPDATE negocios SET estado_crm=?, updated_at=NOW() WHERE id=?', [envio.estado_destino, envio.negocio_id]);
+      }
 
       if (io) io.emit('envio:progreso', { id: envio.id, estado: 'enviado', nombre: envio.nombre });
-      console.log(`✓ Reintento enviado a ${envio.nombre}`);
       await sleep(DELAY);
 
     } catch (e) {
-      console.error(`✗ Error reintentando ${envio.nombre}:`, e.message);
       await db.execute('UPDATE envios SET estado="fallido",error_msg=? WHERE id=?', [e.message, envio.id]);
       if (io) io.emit('envio:progreso', { id: envio.id, estado: 'fallido', nombre: envio.nombre, error: e.message });
       await sleep(2000);
