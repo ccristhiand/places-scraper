@@ -1,0 +1,423 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<link rel="stylesheet" href="/css/shared.css">
+<style>
+body{margin:0;padding:0}
+.layout{display:flex;height:100vh;overflow:hidden}
+.left{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.right{width:360px;flex-shrink:0;border-left:1px solid var(--border);background:#f8fafc;overflow-y:auto;padding:.875rem;display:flex;flex-direction:column;gap:.875rem}
+
+/* Stats funnel */
+.funnel{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:.75rem .875rem;background:#fff;border-bottom:1px solid var(--border);flex-shrink:0}
+.fc{border-radius:8px;padding:.5rem .75rem;text-align:center;cursor:pointer;transition:all .15s;border:2px solid transparent}
+.fc:hover{transform:translateY(-1px)}
+.fc.active{border-color:currentColor}
+.fc-n{font-size:20px;font-weight:800}
+.fc-l{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.fc-nuevo{background:#dbeafe;color:#1d4ed8}
+.fc-contactado{background:#fef9c3;color:#854d0e}
+.fc-interesado{background:#ffedd5;color:#9a3412}
+.fc-cerrado{background:#dcfce7;color:#15803d}
+.fc-descartado{background:#fee2e2;color:#991b1b}
+
+/* Filtros */
+.filter-bar{display:flex;gap:6px;flex-wrap:wrap;padding:.625rem .875rem;background:#fff;border-bottom:1px solid var(--border);align-items:center}
+.fi{height:32px;padding:0 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff}
+.fi:focus{outline:none;border-color:var(--accent)}
+
+/* Tabla */
+.table-area{flex:1;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:9px 10px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+tr:hover td{background:#fafafa}
+tr.sel-row td{background:#eff6ff}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600}
+.b-nuevo{background:#dbeafe;color:#1d4ed8}
+.b-contactado{background:#fef9c3;color:#854d0e}
+.b-interesado{background:#ffedd5;color:#9a3412}
+.b-cerrado{background:#dcfce7;color:#15803d}
+.b-descartado{background:#fee2e2;color:#991b1b}
+.b-plan-b{background:#f1f5f9;color:#475569}
+.b-plan-p{background:#eff6ff;color:#1d4ed8}
+.b-plan-c{background:#dcfce7;color:#15803d}
+
+/* Panel derecho */
+.panel-card{background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:.875rem}
+.pc-h{padding:.75rem;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+.pc-b{padding:.875rem;display:flex;flex-direction:column;gap:.625rem}
+.panel-empty{text-align:center;padding:2.5rem 1rem;color:var(--faint);font-size:13px}
+
+/* Historial notas */
+.nota-item{background:#f8fafc;border-radius:7px;padding:.625rem .75rem;font-size:11px;color:var(--muted);line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.nota-ts{font-size:10px;color:var(--faint);margin-top:3px}
+
+/* Nuevo badge notif */
+.new-badge{position:fixed;top:1rem;right:1rem;background:#dc2626;color:#fff;padding:.625rem 1rem;border-radius:10px;font-size:13px;font-weight:600;z-index:100;display:none;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+@keyframes slideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Mobile */
+.mobile-panel{display:none;position:fixed;inset:0;background:#fff;z-index:50;flex-direction:column;overflow-y:auto}
+.mobile-panel.open{display:flex}
+.mp-h{padding:.875rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:#fff;position:sticky;top:0}
+
+@media(max-width:900px){
+  .right{display:none}
+  table{font-size:11px}
+  .funnel{grid-template-columns:repeat(3,1fr)}
+}
+</style></head><body>
+
+<!-- Notificación lead nuevo -->
+<div class="new-badge" id="newBadge">🔔 Nuevo lead recibido</div>
+
+<div class="layout">
+<div class="left">
+
+  <!-- Embudo stats -->
+  <div class="funnel" id="funnel">
+    <div class="fc fc-nuevo"      onclick="filtrarEstado('nuevo')"      id="fc-nuevo">     <div class="fc-n" id="fn-nuevo">0</div>     <div class="fc-l">Nuevos</div></div>
+    <div class="fc fc-contactado" onclick="filtrarEstado('contactado')" id="fc-contactado"><div class="fc-n" id="fn-contactado">0</div><div class="fc-l">Contactados</div></div>
+    <div class="fc fc-interesado" onclick="filtrarEstado('interesado')" id="fc-interesado"><div class="fc-n" id="fn-interesado">0</div><div class="fc-l">Interesados</div></div>
+    <div class="fc fc-cerrado"    onclick="filtrarEstado('cerrado')"    id="fc-cerrado">   <div class="fc-n" id="fn-cerrado">0</div>   <div class="fc-l">Cerrados</div></div>
+    <div class="fc fc-descartado" onclick="filtrarEstado('descartado')" id="fc-descartado"><div class="fc-n" id="fn-descartado">0</div><div class="fc-l">Descartados</div></div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-bar">
+    <input class="fi" id="fQ" placeholder="🔍 Nombre, clínica, WA..." oninput="debounce()" style="flex:1;min-width:150px">
+    <select class="fi" id="fEstado" onchange="load()">
+      <option value="">Todos los estados</option>
+      <option value="nuevo">🆕 Nuevo</option>
+      <option value="contactado">📞 Contactado</option>
+      <option value="interesado">⭐ Interesado</option>
+      <option value="cerrado">✅ Cerrado</option>
+      <option value="descartado">❌ Descartado</option>
+    </select>
+    <select class="fi" id="fPlan" onchange="load()">
+      <option value="">Todos los planes</option>
+      <option value="Básico">Básico</option>
+      <option value="Profesional">Profesional</option>
+      <option value="Clínica PRO">Clínica PRO ⭐</option>
+    </select>
+    <span id="totalLbl" style="font-size:11px;color:var(--faint);white-space:nowrap"></span>
+    <button onclick="load()" style="height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">🔄</button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-area">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Nombre</th><th>Clínica</th><th>WhatsApp</th><th>Plan</th><th>Ciclo</th><th>País</th><th>Estado</th><th>Registro</th><th>Acciones</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="emptyMsg" style="display:none;text-align:center;padding:3rem;color:var(--faint)">
+      <div style="font-size:32px;margin-bottom:.5rem">📋</div>
+      <p style="font-size:14px;font-weight:500;color:var(--text)">Sin leads aún</p>
+      <p style="font-size:13px;margin-top:4px">Los formularios de la landing aparecerán aquí</p>
+    </div>
+  </div>
+</div>
+
+<!-- Panel derecho -->
+<div class="right" id="panelRight">
+  <div class="panel-empty" id="panelEmpty">
+    <div style="font-size:28px;margin-bottom:.5rem">👆</div>
+    <p>Selecciona un lead para gestionar</p>
+  </div>
+
+  <div id="panelDetalle" style="display:none">
+    <div class="panel-card">
+      <div class="pc-h">
+        <span id="pNombre">—</span>
+        <button onclick="eliminarActivo()" style="height:24px;padding:0 8px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:5px;font-size:11px;cursor:pointer">🗑️</button>
+      </div>
+      <div class="pc-b">
+        <div style="font-size:12px;color:var(--muted);line-height:1.7" id="pInfo"></div>
+        <select id="pEstado" onchange="cambiarEstado()" style="height:34px;border:1px solid var(--border);border-radius:6px;font-size:12px;padding:0 8px">
+          <option value="nuevo">🆕 Nuevo</option>
+          <option value="contactado">📞 Contactado</option>
+          <option value="interesado">⭐ Interesado</option>
+          <option value="cerrado">✅ Cerrado / Ganado</option>
+          <option value="descartado">❌ Descartado</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Enviar WhatsApp -->
+    <div class="panel-card">
+      <div class="pc-h">💬 Enviar mensaje WA</div>
+      <div class="pc-b">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          <button onclick="tpl('demo')"    class="btn btn-outline btn-xs">📅 Demo</button>
+          <button onclick="tpl('seguimiento')" class="btn btn-outline btn-xs">🔄 Seguimiento</button>
+          <button onclick="tpl('oferta')"  class="btn btn-outline btn-xs">🏷️ Oferta</button>
+          <button onclick="tpl('cierre')"  class="btn btn-outline btn-xs">🤝 Cierre</button>
+        </div>
+        <textarea id="msgWA" placeholder="Escribe tu mensaje personalizado..." style="width:100%;height:100px;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;resize:none;font-family:inherit"></textarea>
+        <button onclick="enviarWA()" class="btn btn-success btn-sm" style="width:100%;justify-content:center">📤 Enviar por WhatsApp</button>
+        <div id="waOk" style="display:none;font-size:12px;color:#15803d;text-align:center">✅ Mensaje enviado</div>
+        <div id="waErr" style="display:none;font-size:12px;color:#dc2626;text-align:center"></div>
+      </div>
+    </div>
+
+    <!-- Notas -->
+    <div class="panel-card">
+      <div class="pc-h">📝 Notas internas</div>
+      <div class="pc-b">
+        <textarea id="notaInput" placeholder="Agregar nota..." style="width:100%;height:70px;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;resize:none;font-family:inherit"></textarea>
+        <button onclick="guardarNota()" class="btn btn-primary btn-sm" style="width:100%;justify-content:center">Guardar nota</button>
+        <div id="notasHist" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Mobile panel -->
+<div class="mobile-panel" id="mobilePanel">
+  <div class="mp-h">
+    <button onclick="document.getElementById('mobilePanel').classList.remove('open')" style="background:none;border:none;font-size:24px;cursor:pointer">←</button>
+    <h3 id="mpTitle" style="font-size:14px;font-weight:600;flex:1"></h3>
+  </div>
+  <div style="padding:.875rem;display:flex;flex-direction:column;gap:.875rem">
+    <div style="font-size:12px;color:var(--muted);line-height:1.7" id="mpInfo"></div>
+    <select id="mpEstado" onchange="cambiarEstadoM()" style="height:42px;border:1px solid var(--border);border-radius:8px;font-size:14px;padding:0 10px">
+      <option value="nuevo">🆕 Nuevo</option>
+      <option value="contactado">📞 Contactado</option>
+      <option value="interesado">⭐ Interesado</option>
+      <option value="cerrado">✅ Cerrado</option>
+      <option value="descartado">❌ Descartado</option>
+    </select>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button onclick="tplM('demo')"    class="btn btn-outline btn-sm">📅 Demo</button>
+      <button onclick="tplM('seguimiento')" class="btn btn-outline btn-sm">🔄 Seguimiento</button>
+      <button onclick="tplM('oferta')"  class="btn btn-outline btn-sm">🏷️ Oferta</button>
+    </div>
+    <textarea id="msgWAM" placeholder="Mensaje WhatsApp..." style="width:100%;height:100px;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;resize:none;font-family:inherit"></textarea>
+    <button onclick="enviarWAM()" class="btn btn-success" style="width:100%;justify-content:center">📤 Enviar por WhatsApp</button>
+    <textarea id="notaM" placeholder="Nota interna..." style="width:100%;height:70px;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;resize:none;font-family:inherit"></textarea>
+    <button onclick="guardarNotaM()" class="btn btn-primary" style="width:100%;justify-content:center">Guardar nota</button>
+  </div>
+</div>
+
+<script>
+var activo  = null;
+var debTimer = null;
+var ESTADO_C = {nuevo:'b-nuevo',contactado:'b-contactado',interesado:'b-interesado',cerrado:'b-cerrado',descartado:'b-descartado'};
+var ESTADO_L = {nuevo:'🆕 Nuevo',contactado:'📞 Contactado',interesado:'⭐ Interesado',cerrado:'✅ Cerrado',descartado:'❌ Descartado'};
+var PLAN_C   = {'Básico':'b-plan-b','Profesional':'b-plan-p','Clínica PRO':'b-plan-c'};
+
+var TEMPLATES = {
+  demo: function(l){ return 'Hola '+l.nombre.split(' ')[0]+' 👋\n\nGracias por tu interés en *VetNetcodip*. Me comunicó para coordinar tu demo gratuita del sistema.\n\n¿Cuándo tienes 30 minutos disponibles esta semana? La demo es 100% en línea y sin compromiso.\n\nQuedamos atentos. 🐾'; },
+  seguimiento: function(l){ return 'Hola '+l.nombre.split(' ')[0]+'! 😊\n\nTe escribo para dar seguimiento a tu solicitud de demo de *VetNetcodip*.\n\n¿Pudiste revisar la información que te compartimos? ¿Tienes alguna duda o pregunta que pueda resolver?\n\nEstamos aquí para ayudarte. 🙌'; },
+  oferta: function(l){ return 'Hola '+l.nombre.split(' ')[0]+'! ⚡\n\nRecuerda que nuestra oferta especial *'+l.plan+'* está activa solo hasta el *31 de agosto*.\n\nPrecio actual: *S/.79/mes* (regular: S/.119)\nAhorras: *S/.40 cada mes*\n\n14 días gratis incluidos. ¿Activamos tu cuenta hoy? 🎯'; },
+  cierre: function(l){ return 'Hola '+l.nombre.split(' ')[0]+'! 🤝\n\nEs un gusto acompañarte en este proceso. ¿Estás listo para dar el siguiente paso y activar *'+l.plan+'* para '+l.clinica+'?\n\nTe garantizamos soporte personalizado desde el primer día. ¿Comenzamos? 🚀'; }
+};
+
+function debounce() { clearTimeout(debTimer); debTimer = setTimeout(load, 350); }
+
+function filtrarEstado(estado) {
+  var sel = document.getElementById('fEstado');
+  sel.value = sel.value === estado ? '' : estado;
+  document.querySelectorAll('.fc').forEach(function(f){ f.classList.remove('active'); });
+  if (sel.value) document.getElementById('fc-'+sel.value)?.classList.add('active');
+  load();
+}
+
+async function load() {
+  var q      = document.getElementById('fQ').value;
+  var estado = document.getElementById('fEstado').value;
+  var plan   = document.getElementById('fPlan').value;
+  var url    = '/api/leads?limit=200' + (q?'&q='+encodeURIComponent(q):'') + (estado?'&estado='+estado:'') + (plan?'&plan='+encodeURIComponent(plan):'');
+
+  var data = await fetch(url).then(function(r){return r.json();}).catch(function(){return {rows:[],total:0};});
+  var rows = data.rows || [];
+  document.getElementById('totalLbl').textContent = rows.length + ' leads';
+  document.getElementById('emptyMsg').style.display = rows.length ? 'none' : 'block';
+
+  document.getElementById('tbody').innerHTML = rows.map(function(r) {
+    return '<tr onclick="selRow('+r.id+')" style="cursor:pointer" '+(activo&&activo.id===r.id?'class="sel-row"':'')+'>' +
+      '<td style="color:var(--faint);font-family:monospace;font-size:11px">#'+r.id+'</td>' +
+      '<td><b>'+esc(r.nombre)+'</b></td>' +
+      '<td style="font-size:11px;color:var(--muted)">'+esc(r.clinica)+'</td>' +
+      '<td style="font-family:monospace;font-size:11px;color:var(--accent)">'+esc(r.whatsapp)+'</td>' +
+      '<td><span class="badge '+(PLAN_C[r.plan]||'b-gray')+'">'+esc(r.plan)+'</span></td>' +
+      '<td style="font-size:11px;color:var(--muted)">'+esc(r.ciclo||'—')+'</td>' +
+      '<td style="font-size:11px">'+esc(r.pais||'—')+'</td>' +
+      '<td><span class="badge '+(ESTADO_C[r.estado]||'b-gray')+'">'+(ESTADO_L[r.estado]||r.estado)+'</span></td>' +
+      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+fmtDate(r.fecha_registro)+'</td>' +
+      '<td>' +
+        '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();selRow('+r.id+')">Ver</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  loadStats();
+}
+
+async function loadStats() {
+  var data = await fetch('/api/leads/stats').then(function(r){return r.json();}).catch(function(){return {stats:{}};});
+  var s = data.stats || {};
+  ['nuevo','contactado','interesado','cerrado','descartado'].forEach(function(k){
+    var el = document.getElementById('fn-'+k);
+    if (el) el.textContent = s[k] || 0;
+  });
+}
+
+async function selRow(id) {
+  var data = await fetch('/api/leads/'+id).then(function(r){return r.json();}).catch(function(){return {};});
+  var lead = data.lead; if (!lead) return;
+  activo = lead;
+
+  // Desktop panel
+  document.getElementById('panelEmpty').style.display = 'none';
+  document.getElementById('panelDetalle').style.display = '';
+  document.getElementById('pNombre').textContent = lead.nombre;
+  document.getElementById('pEstado').value = lead.estado || 'nuevo';
+  document.getElementById('pInfo').innerHTML =
+    '🏥 <b>'+esc(lead.clinica)+'</b><br>' +
+    '📱 '+esc(lead.whatsapp)+'<br>' +
+    (lead.email?'✉️ '+esc(lead.email)+'<br>':'') +
+    '🌎 '+esc(lead.pais||'—')+'<br>' +
+    '📦 <b>'+esc(lead.plan)+'</b> · '+esc(lead.ciclo||'Mensual')+'<br>' +
+    '📅 '+fmtDate(lead.fecha_registro);
+  renderNotas(lead.notas||'');
+  document.getElementById('waOk').style.display = 'none';
+  document.getElementById('waErr').style.display = 'none';
+
+  // Highlight row
+  document.querySelectorAll('tr.sel-row').forEach(function(t){t.classList.remove('sel-row');});
+  var rows = document.querySelectorAll('#tbody tr');
+  rows.forEach(function(tr){ if(tr.textContent.includes('#'+id)) tr.classList.add('sel-row'); });
+
+  // Mobile
+  document.getElementById('mpTitle').textContent = lead.nombre;
+  document.getElementById('mpInfo').innerHTML = '🏥 '+esc(lead.clinica)+' · 📱 '+esc(lead.whatsapp)+' · 📦 '+esc(lead.plan);
+  document.getElementById('mpEstado').value = lead.estado || 'nuevo';
+
+  // Check if mobile
+  if (window.innerWidth < 900) document.getElementById('mobilePanel').classList.add('open');
+}
+
+function renderNotas(notasStr) {
+  var el = document.getElementById('notasHist');
+  if (!notasStr.trim()) { el.innerHTML = '<div style="font-size:11px;color:var(--faint);text-align:center;padding:.5rem">Sin notas aún</div>'; return; }
+  var lineas = notasStr.split('\n').filter(function(l){return l.trim();}).reverse();
+  el.innerHTML = lineas.map(function(l){
+    return '<div class="nota-item">'+esc(l)+'</div>';
+  }).join('');
+}
+
+async function cambiarEstado() {
+  if (!activo) return;
+  var estado = document.getElementById('pEstado').value;
+  await fetch('/api/leads/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({estado}) });
+  activo.estado = estado;
+  load();
+}
+async function cambiarEstadoM() {
+  if (!activo) return;
+  var estado = document.getElementById('mpEstado').value;
+  await fetch('/api/leads/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({estado}) });
+  activo.estado = estado;
+  load();
+}
+
+function tpl(tipo) {
+  if (!activo) return;
+  document.getElementById('msgWA').value = TEMPLATES[tipo](activo);
+}
+function tplM(tipo) {
+  if (!activo) return;
+  document.getElementById('msgWAM').value = TEMPLATES[tipo](activo);
+}
+
+async function enviarWA() {
+  if (!activo) return;
+  var texto = document.getElementById('msgWA').value.trim();
+  if (!texto) return;
+  document.getElementById('waOk').style.display = 'none';
+  document.getElementById('waErr').style.display = 'none';
+  var r = await fetch('/api/leads/'+activo.id+'/mensaje', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texto}) });
+  var d = await r.json();
+  if (d.ok) {
+    document.getElementById('waOk').style.display = 'block';
+    document.getElementById('msgWA').value = '';
+    setTimeout(function(){ selRow(activo.id); }, 500);
+  } else {
+    document.getElementById('waErr').textContent = '❌ '+d.error;
+    document.getElementById('waErr').style.display = 'block';
+  }
+}
+async function enviarWAM() {
+  if (!activo) return;
+  var texto = document.getElementById('msgWAM').value.trim();
+  if (!texto) return;
+  var r = await fetch('/api/leads/'+activo.id+'/mensaje', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({texto}) });
+  var d = await r.json();
+  if (d.ok) { alert('✅ Mensaje enviado'); document.getElementById('msgWAM').value=''; }
+  else alert('Error: '+d.error);
+}
+
+async function guardarNota() {
+  if (!activo) return;
+  var nota = document.getElementById('notaInput').value.trim();
+  if (!nota) return;
+  var ts = '['+new Date().toLocaleString('es-PE')+'] '+nota;
+  var notasNuevas = (activo.notas||'') + (activo.notas?'\n':'') + ts;
+  await fetch('/api/leads/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({notas: notasNuevas}) });
+  activo.notas = notasNuevas;
+  document.getElementById('notaInput').value = '';
+  renderNotas(notasNuevas);
+}
+async function guardarNotaM() {
+  if (!activo) return;
+  var nota = document.getElementById('notaM').value.trim();
+  if (!nota) return;
+  var ts = '['+new Date().toLocaleString('es-PE')+'] '+nota;
+  var notasNuevas = (activo.notas||'') + (activo.notas?'\n':'') + ts;
+  await fetch('/api/leads/'+activo.id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({notas: notasNuevas}) });
+  activo.notas = notasNuevas;
+  document.getElementById('notaM').value = '';
+  alert('✅ Nota guardada');
+}
+
+async function eliminarActivo() {
+  if (!activo||!confirm('¿Eliminar este lead?')) return;
+  await fetch('/api/leads/'+activo.id, {method:'DELETE'});
+  activo = null;
+  document.getElementById('panelDetalle').style.display = 'none';
+  document.getElementById('panelEmpty').style.display = 'block';
+  document.getElementById('mobilePanel').classList.remove('open');
+  load();
+}
+
+function fmtDate(d){ if(!d)return'—'; return new Date(d).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Socket.io — notificaciones en tiempo real
+window.addEventListener('load', function() {
+  var s = document.createElement('script');
+  s.src = '/socket.io/socket.io.js';
+  s.onload = function() {
+    try {
+      var sock = io({ transports:['websocket','polling'] });
+      sock.on('lead:nuevo', function(d) {
+        var badge = document.getElementById('newBadge');
+        badge.textContent = '🔔 Nuevo lead: '+d.nombre+' ('+d.plan+')';
+        badge.style.display = 'block';
+        setTimeout(function(){badge.style.display='none';}, 6000);
+        load();
+      });
+    } catch(e){}
+  };
+  document.head.appendChild(s);
+});
+
+load();
+</script>
+</body></html>

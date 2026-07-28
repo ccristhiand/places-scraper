@@ -85,6 +85,11 @@ iframe{width:100%;height:100%;border:none;display:block}
     <div class="nav-group">CRM</div>
     <div class="nav-item" onclick="navTo('crm','📊 Embudo CRM',this)"><span class="icon">📊</span>Embudo CRM</div>
     <div class="nav-item" onclick="navTo('demos','📅 Demos',this)"><span class="icon">📅</span>Demos</div>
+    <div class="nav-group">Inbound</div>
+    <div class="nav-item" onclick="navTo('leads','🎯 Leads Landing',this)" id="navLeads">
+      <span class="icon">🎯</span>Leads Landing
+      <span class="nav-badge" id="badgeLeads" style="display:none">!</span>
+    </div>
   </nav>
   <div class="wa-status">
     <div class="wa-dot" id="waDot"></div>
@@ -239,6 +244,10 @@ window.addEventListener('load', function() {
     _socket.on('wa:status', function(d){ updateWAStatus(d.status, d.numero); });
     _socket.on('wa:qr', function(d){
       mostrarQR(d.qr);
+    });
+    _socket.on('lead:nuevo', function(d){
+      var badge = document.getElementById('badgeLeads');
+      if (badge) { badge.style.display=''; }
     });
     _socket.on('wa:mensaje_entrante', function(){
       if (_vista === 'chat') return;
