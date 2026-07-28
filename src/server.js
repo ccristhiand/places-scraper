@@ -59,6 +59,18 @@ app.post('/api/wa/desconectar', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/wa/reiniciar-sesion', async (req, res) => {
+  try {
+    // Forzar borrado de sesión y reconexión limpia
+    await wa.desconectar();
+    const fs      = require('fs');
+    const path    = require('path');
+    const authDir = path.join(__dirname, '../.wa_auth');
+    if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true });
+    res.json({ ok: true, msg: 'Sesión eliminada. Escanea el QR para reconectar.' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/views/:view', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/views', req.params.view + '.html'));
 });
