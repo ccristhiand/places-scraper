@@ -159,14 +159,22 @@ async function connect() {
         const esMio     = !!msg.key.fromMe;
         const jidLimpio = extraerJID(jid);
 
-        // Número real — puede venir en el JID estándar o en senderPn (mensajes @lid)
+        // Número real del CONTACTO (no del remitente)
+        // - Entrante: el contacto es quien envía → senderPn o jid
+        // - Saliente: el contacto es el destinatario → remoteJid
         let numero = null;
+
         if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@c.us')) {
+          // JID normal — número directo
           numero = jidLimpio;
-        } else if (msg.key.senderPn) {
-          // senderPn contiene el número real aunque el JID sea @lid
-          numero = msg.key.senderPn.replace('@s.whatsapp.net','').replace(/[^0-9]/g,'');
-          console.log('  ✓ Número real obtenido de senderPn:', numero);
+        } else if (jid.endsWith('@lid')) {
+          if (!esMio && msg.key.senderPn) {
+            // Entrante: número real del remitente en senderPn
+            numero = msg.key.senderPn.replace('@s.whatsapp.net','').replace(/[^0-9]/g,'');
+            console.log('  ✓ senderPn (entrante):', numero);
+          }
+          // Saliente desde celular: senderPn no viene
+          // El número se obtiene buscando por wa_jid en buscarNegocio
         }
 
         const texto = extraerTexto(msg);
