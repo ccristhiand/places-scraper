@@ -130,7 +130,7 @@ router.post('/:negocioId/enviar', async (req, res) => {
     const numero = limpiarNumero(n.whatsapp || n.telefono_int || n.telefono);
     if (!numero) return res.status(400).json({ error: 'Sin número de WhatsApp. Agrégalo en Contactos primero.' });
 
-    await wa.enviarMensaje({ numero, texto });
+    await wa.enviarMensaje({ numero, texto, negocioId: +nid });
 
     // Guardar mensaje — cuando WA entrega el evento "enviado",
     // el whatsapp.js lo captará y guardará con wa_jid automáticamente.

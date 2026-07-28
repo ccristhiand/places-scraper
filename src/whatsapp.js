@@ -3,8 +3,7 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  isJidBroadcast,
-  makeInMemoryStore
+  isJidBroadcast
 } = require('@whiskeysockets/baileys');
 const pino   = require('pino');
 const QRCode = require('qrcode');
@@ -12,19 +11,9 @@ const path   = require('path');
 const fs     = require('fs');
 const db     = require('./db');
 
-const AUTH_DIR  = path.join(__dirname, '../.wa_auth');
-const STORE_FILE = path.join(__dirname, '../.wa_auth/store.json');
+const AUTH_DIR = path.join(__dirname, '../.wa_auth');
 
-// Store en memoria — mapea LIDs a números reales
-const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) });
-try {
-  if (fs.existsSync(STORE_FILE)) store.fromJSON(JSON.parse(fs.readFileSync(STORE_FILE)));
-} catch(e) {}
-
-// Guardar store cada 30 segundos
-setInterval(() => {
-  try { fs.writeFileSync(STORE_FILE, JSON.stringify(store.toJSON())); } catch(e) {}
-}, 30000);
+// Store no disponible en esta versión de Baileys
 
 let sock              = null;
 let io                = null;
@@ -45,40 +34,7 @@ function extraerJID(jid) {
   return jid.replace('@s.whatsapp.net','').replace('@c.us','').replace('@lid','');
 }
 
-// Resolver número real desde LID usando el store
-async function resolverNumeroDesdeStore(jid) {
-  try {
-    // El store guarda contactos con su JID real
-    const contacts = store.contacts;
-    if (!contacts) return null;
 
-    const jidLimpio = extraerJID(jid);
-
-    // Buscar en contactos del store
-    for (const [contactJid, contact] of Object.entries(contacts)) {
-      if (contact.lid && extraerJID(contact.lid) === jidLimpio) {
-        const num = contactJid.replace('@s.whatsapp.net','').replace('@c.us','');
-        console.log('  ✓ Store resolvió LID', jidLimpio, '→', num);
-        return num;
-      }
-    }
-
-    // También intentar con chats del store
-    const chats = store.chats;
-    if (chats) {
-      const chat = chats.get(jid);
-      if (chat?.id && !chat.id.endsWith('@lid')) {
-        const num = extraerJID(chat.id);
-        console.log('  ✓ Store (chats) resolvió LID', jidLimpio, '→', num);
-        return num;
-      }
-    }
-
-    return null;
-  } catch(e) {
-    return null;
-  }
-}
 
 async function buscarNegocio(jid, numero) {
   try {
@@ -153,9 +109,6 @@ async function connect() {
     retryRequestDelayMs: 2000,
   });
 
-  // Conectar store al socket — esto hace el mapeo LID → número automáticamente
-  store.bind(sock.ev);
-
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
@@ -217,11 +170,8 @@ async function connect() {
             // Entrante: senderPn tiene el número real
             numero = msg.key.senderPn.replace('@s.whatsapp.net','').replace(/[^0-9]/g,'');
             console.log('  ✓ senderPn:', numero);
-          } else {
-            // Saliente o sin senderPn: intentar resolver via store
-            const resuelto = await resolverNumeroDesdeStore(jid);
-            if (resuelto) numero = resuelto;
           }
+          // Saliente sin senderPn: se resuelve por wa_jid en buscarNegocio
         }
 
         const texto = extraerTexto(msg);

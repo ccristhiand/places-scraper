@@ -209,7 +209,7 @@ async function enviarEnBackground(campana, negocio_ids, estado_destino) {
         continue;
       }
 
-      await wa.enviarMensaje({ numero: envio.numero, texto: envio.mensaje_final, imagenPath });
+      await wa.enviarMensaje({ numero: envio.numero, texto: envio.mensaje_final, imagenPath, negocioId: nid });
       await db.execute('UPDATE envios SET estado="enviado",enviado_at=NOW() WHERE id=?', [envio.id]);
       await db.execute('INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
         [nid, envio.numero, 'saliente', envio.mensaje_final]);
@@ -272,7 +272,7 @@ async function reintentarEnBackground(pendientes) {
       const imagenPath = envio.imagen_url ? path.join(__dirname, '../../', envio.imagen_url) : null;
       const texto = envio.mensaje_final || procesarVariables(envio.mensaje || '', envio);
 
-      await wa.enviarMensaje({ numero, texto, imagenPath });
+      await wa.enviarMensaje({ numero, texto, imagenPath, negocioId: envio.negocio_id });
       await db.execute('UPDATE envios SET estado="enviado",enviado_at=NOW() WHERE id=?', [envio.id]);
       await db.execute('INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
         [envio.negocio_id, numero, 'saliente', texto]);
