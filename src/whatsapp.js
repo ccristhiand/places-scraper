@@ -168,7 +168,23 @@ async function connect() {
         const texto = extraerTexto(msg);
         if (!texto) continue;
 
-        console.log((esMio ? '📤 Enviado a' : '📩 Recibido de'), jidLimpio, ':', texto.substring(0, 50));
+        // ── LOG COMPLETO para debug ──────────────────────────────
+        console.log('═══════════════════════════════════════');
+        console.log((esMio ? '📤 SALIENTE' : '📩 ENTRANTE'));
+        console.log('  jid:          ', jid);
+        console.log('  jidLimpio:    ', jidLimpio);
+        console.log('  numero:       ', numero);
+        console.log('  fromMe:       ', esMio);
+        console.log('  pushName:     ', msg.pushName);
+        console.log('  notifyName:   ', msg.verifiedBizName);
+        console.log('  wa_id:        ', msg.key.id);
+        console.log('  participant:  ', msg.key.participant);
+        console.log('  texto:        ', texto.substring(0, 60));
+        console.log('  msg.key:      ', JSON.stringify(msg.key));
+        if (msg.message?.extendedTextMessage?.contextInfo) {
+          console.log('  contextInfo:  ', JSON.stringify(msg.message.extendedTextMessage.contextInfo));
+        }
+        console.log('═══════════════════════════════════════');
 
         // Deduplicar por wa_id
         if (msg.key.id) {
