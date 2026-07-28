@@ -248,6 +248,7 @@ async function connect() {
 }
 
 async function enviarMensaje({ numero, texto, imagenPath, negocioId }) {
+  console.log('📨 enviarMensaje llamado con:', JSON.stringify({ numero, negocioId, texto: texto?.substring(0,30) }));
   if (!sock || waStatus !== 'conectado') throw new Error('WhatsApp no conectado');
 
   const jid = numero.includes('@') ? numero : numero.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
