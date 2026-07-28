@@ -132,9 +132,17 @@ async function connect() {
       const code      = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
       console.log('⚠️ Conexión cerrada. Código:', code);
-      if (loggedOut) {
+
+      // Códigos que NO deben reconectar
+      const errorDefinitivo = loggedOut || code === 405 || code === 401 || code === 403;
+
+      if (errorDefinitivo) {
         waStatus = 'desconectado';
-        emit('wa:status', { status: 'desconectado' });
+        emit('wa:status', { status: 'desconectado', error: code });
+        if (code === 405) {
+          console.log('🚫 Cuenta bloqueada temporalmente por WhatsApp (código 405). Espera 24h.');
+          emit('wa:bloqueado', { msg: '🚫 Cuenta bloqueada por WhatsApp. Espera 24 horas antes de reconectar.' });
+        }
         if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
       } else {
         reconnectAttempts++;
