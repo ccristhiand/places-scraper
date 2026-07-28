@@ -2,23 +2,25 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <link rel="stylesheet" href="/css/shared.css">
 <style>
-.layout{display:flex;gap:1rem;padding:1rem}
-.left{width:300px;flex-shrink:0}
+.layout{display:flex;gap:1rem;padding:1rem;min-height:calc(100vh - 0px)}
+.left{width:280px;flex-shrink:0}
 .right{flex:1;min-width:0}
-.camp-item{padding:.875rem;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;margin-bottom:.625rem;transition:all .15s}
+.camp-item{padding:.875rem;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;margin-bottom:.625rem;transition:all .15s;background:#fff}
 .camp-item:hover{border-color:#93c5fd;background:#f8fafc}
 .camp-item.active{border-color:var(--accent);background:#eff6ff}
 .camp-name{font-size:13px;font-weight:600;margin-bottom:3px}
-.camp-prev{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.camp-img{width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0}
+.camp-prev{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .vars{display:flex;gap:6px;flex-wrap:wrap;margin-top:.5rem}
 .var-tag{padding:3px 8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;font-size:11px;color:#1d4ed8;cursor:pointer;font-family:monospace}
 .var-tag:hover{background:#dbeafe}
-.wa-preview{background:#e5ddd5;border-radius:10px;padding:1rem;min-height:150px}
-.wa-bubble{background:#fff;border-radius:0 10px 10px 10px;padding:.75rem 1rem;max-width:90%;display:inline-block;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.wa-preview{background:#e5ddd5;border-radius:10px;padding:1rem;min-height:100px}
+.wa-bubble{background:#fff;border-radius:0 10px 10px 10px;padding:.625rem .875rem;max-width:90%;display:inline-block;box-shadow:0 1px 2px rgba(0,0,0,.1)}
 .wa-text{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
-.drop-area{border:2px dashed #cbd5e1;border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;transition:all .15s}
+.drop-area{border:2px dashed #cbd5e1;border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;transition:all .15s;background:#fff}
 .drop-area:hover,.drop-area.drag{border-color:var(--accent);background:#f8fafc}
+.alert-ok{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;font-size:13px;color:#15803d;margin-bottom:.875rem;display:none}
+.alert-err{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.75rem 1rem;font-size:13px;color:#dc2626;margin-bottom:.875rem;display:none}
+.empty-camps{text-align:center;padding:2rem 1rem;color:var(--faint);font-size:13px}
 @media(max-width:768px){
   .layout{flex-direction:column}
   .left{width:100%}
@@ -26,53 +28,69 @@
 </style></head><body>
 <div class="layout">
 
+<!-- Lista campañas -->
 <div class="left">
   <div class="card">
-    <div class="card-h"><h3>📝 Campañas</h3><button class="btn btn-primary btn-sm" onclick="nueva()">+ Nueva</button></div>
+    <div class="card-h">
+      <h3>📝 Campañas</h3>
+      <button class="btn btn-primary btn-sm" onclick="nueva()">+ Nueva</button>
+    </div>
     <div style="padding:.75rem" id="listaCampanas">
-      <div style="text-align:center;padding:1.5rem;color:var(--faint);font-size:12px">Cargando...</div>
+      <div class="empty-camps">Cargando...</div>
     </div>
   </div>
 </div>
 
+<!-- Editor -->
 <div class="right">
+  <div class="alert-ok" id="alertOk"></div>
+  <div class="alert-err" id="alertErr"></div>
+
   <div class="card">
     <div class="card-h">
       <h3 id="editorTitle">✏️ Nueva campaña</h3>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-outline btn-sm" onclick="cancelar()">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="guardar()">💾 Guardar</button>
+        <button class="btn btn-outline btn-sm" onclick="nueva()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" id="btnGuardar" onclick="guardar()">💾 Guardar</button>
       </div>
     </div>
     <div class="card-b">
-      <div class="field"><label>Nombre de la campaña</label><input id="cNombre" placeholder="Ej: Presentación inicial veterinarias"></div>
       <div class="field">
-        <label>Mensaje <span style="color:var(--faint);font-weight:400;text-transform:none">(usa las variables de abajo)</span></label>
-        <textarea id="cMensaje" placeholder="Hola {{nombre}}, somos..." oninput="updatePreview()" style="min-height:140px"></textarea>
+        <label>Nombre de la campaña *</label>
+        <input id="cNombre" placeholder="Ej: Presentación inicial veterinarias">
+      </div>
+      <div class="field">
+        <label>Mensaje * <span style="color:var(--faint);font-weight:400;text-transform:none;font-size:10px">(usa las variables)</span></label>
+        <textarea id="cMensaje" placeholder="Hola {{nombre}}, te contactamos de..." oninput="updatePreview()" style="min-height:120px"></textarea>
       </div>
       <div style="margin-bottom:.875rem">
-        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Variables</div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Variables disponibles</div>
         <div class="vars">
           <span class="var-tag" onclick="insertVar('{{nombre}}')">{{nombre}}</span>
           <span class="var-tag" onclick="insertVar('{{telefono}}')">{{telefono}}</span>
           <span class="var-tag" onclick="insertVar('{{distrito}}')">{{distrito}}</span>
           <span class="var-tag" onclick="insertVar('{{provincia}}')">{{provincia}}</span>
+          <span class="var-tag" onclick="insertVar('{{departamento}}')">{{departamento}}</span>
         </div>
       </div>
       <div class="field">
         <label>Imagen (opcional)</label>
-        <div class="drop-area" id="dropArea" onclick="document.getElementById('imgInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
-          <div id="dropLabel">📎 Toca o arrastra imagen aquí<br><span style="font-size:11px;color:var(--faint)">JPG, PNG — máx. 10MB</span></div>
-          <img id="imgPreviewSmall" style="max-height:80px;border-radius:6px;display:none;margin:0 auto">
+        <div class="drop-area" id="dropArea"
+          onclick="document.getElementById('imgInput').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)">
+          <div id="dropLabel">📎 Toca o arrastra una imagen aquí<br><span style="font-size:11px;color:var(--faint)">JPG, PNG — máx. 10MB</span></div>
+          <img id="imgPreviewSmall" style="max-height:80px;border-radius:6px;display:none;margin:0 auto;margin-top:8px">
         </div>
         <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
-        <button id="btnQuitarImg" onclick="quitarImg()" style="display:none;margin-top:4px;width:100%;height:28px;font-size:11px;background:#fef2f2;border:1px solid #fecaca;color:var(--red);border-radius:6px;cursor:pointer">✕ Quitar imagen</button>
+        <button id="btnQuitarImg" onclick="quitarImg()" style="display:none;margin-top:4px;width:100%;height:28px;font-size:11px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;cursor:pointer">✕ Quitar imagen</button>
       </div>
-      <div style="margin-top:.875rem">
-        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Vista previa</div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Vista previa WhatsApp</div>
         <div class="wa-preview">
           <div class="wa-bubble">
-            <img id="prevImg" style="display:none;width:100%;border-radius:6px;margin-bottom:.5rem">
+            <img id="prevImg" style="display:none;width:100%;border-radius:6px;margin-bottom:.5rem;max-height:200px;object-fit:cover">
             <div class="wa-text" id="prevText">Tu mensaje aparecerá aquí...</div>
             <div style="font-size:10px;color:var(--faint);text-align:right;margin-top:4px">12:34 ✓✓</div>
           </div>
@@ -84,56 +102,173 @@
 </div>
 
 <script>
-let campanas=[], editId=null, imgFile=null;
+var campanas = [];
+var editId   = null;
+var imgFile  = null;
 
-async function loadCampanas(){
-  const data=await fetch('/api/campanas').then(r=>r.json()).catch(()=>({rows:[]}));
-  campanas=data.rows||[];
-  const el=document.getElementById('listaCampanas');
-  el.innerHTML=campanas.length?campanas.map(c=>`
-    <div class="camp-item" id="ci_${c.id}" onclick="editarCampana(${c.id})">
-      <div style="display:flex;align-items:flex-start;gap:8px">
-        <div style="flex:1;min-width:0">
-          <div class="camp-name">${c.nombre}</div>
-          <div class="camp-prev">${c.mensaje}</div>
-          <div style="display:flex;gap:4px;margin-top:6px">
-            <button class="btn btn-outline btn-xs" onclick="event.stopPropagation();editarCampana(${c.id})">✏️ Editar</button>
-            <button class="btn btn-xs" onclick="event.stopPropagation();eliminar(${c.id})" style="background:#fef2f2;border:1px solid #fecaca;color:var(--red)">🗑️</button>
-          </div>
-        </div>
-        ${c.imagen_url?`<img src="${c.imagen_url}" class="camp-img">`:''}
-      </div>
-    </div>`).join(''):`<div style="text-align:center;padding:1.5rem;color:var(--faint);font-size:12px">Sin campañas. Crea la primera.</div>`;
+async function loadCampanas() {
+  try {
+    var r    = await fetch('/api/campanas');
+    var data = await r.json();
+    campanas = data.rows || [];
+    renderLista();
+  } catch(e) {
+    document.getElementById('listaCampanas').innerHTML =
+      '<div class="empty-camps" style="color:#dc2626">Error cargando campañas: ' + e.message + '</div>';
+  }
 }
 
-function nueva(){ editId=null; imgFile=null; document.getElementById('editorTitle').textContent='✏️ Nueva campaña'; document.getElementById('cNombre').value=''; document.getElementById('cMensaje').value=''; quitarImg(); updatePreview(); document.querySelectorAll('.camp-item').forEach(i=>i.classList.remove('active')); }
-function cancelar(){ nueva(); }
-function editarCampana(id){
-  const c=campanas.find(x=>x.id===id); if(!c)return;
-  editId=id; imgFile=null;
-  document.getElementById('editorTitle').textContent='✏️ Editar: '+c.nombre;
-  document.getElementById('cNombre').value=c.nombre;
-  document.getElementById('cMensaje').value=c.mensaje;
-  document.querySelectorAll('.camp-item').forEach(i=>i.classList.remove('active'));
-  document.getElementById('ci_'+id)?.classList.add('active');
-  if(c.imagen_url){ document.getElementById('prevImg').src=c.imagen_url; document.getElementById('prevImg').style.display='block'; document.getElementById('imgPreviewSmall').src=c.imagen_url; document.getElementById('imgPreviewSmall').style.display='block'; document.getElementById('dropLabel').style.display='none'; document.getElementById('btnQuitarImg').style.display=''; }
-  else { quitarImg(); }
+function renderLista() {
+  var el = document.getElementById('listaCampanas');
+  if (!campanas.length) {
+    el.innerHTML = '<div class="empty-camps">Sin campañas aún.<br>Crea la primera con el botón + Nueva.</div>';
+    return;
+  }
+  el.innerHTML = campanas.map(function(c) {
+    return '<div class="camp-item" id="ci_'+c.id+'" onclick="editarCampana('+c.id+')">' +
+      '<div style="display:flex;align-items:flex-start;gap:8px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="camp-name">'+esc(c.nombre)+'</div>' +
+          '<div class="camp-prev">'+esc(c.mensaje)+'</div>' +
+          '<div style="display:flex;gap:4px;margin-top:6px">' +
+            '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();editarCampana('+c.id+')">✏️ Editar</button>' +
+            '<button class="btn btn-xs" onclick="event.stopPropagation();eliminar('+c.id+')" style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626">🗑️</button>' +
+          '</div>' +
+        '</div>' +
+        (c.imagen_url ? '<img src="'+c.imagen_url+'" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0">' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function nueva() {
+  editId = null; imgFile = null;
+  document.getElementById('editorTitle').textContent = '✏️ Nueva campaña';
+  document.getElementById('cNombre').value = '';
+  document.getElementById('cMensaje').value = '';
+  document.querySelectorAll('.camp-item').forEach(function(i){ i.classList.remove('active'); });
+  quitarImg();
+  updatePreview();
+  hideAlerts();
+}
+
+function editarCampana(id) {
+  var c = campanas.find(function(x){ return x.id === id; });
+  if (!c) return;
+  editId = id; imgFile = null;
+  document.getElementById('editorTitle').textContent = '✏️ Editar: ' + c.nombre;
+  document.getElementById('cNombre').value  = c.nombre;
+  document.getElementById('cMensaje').value = c.mensaje;
+  document.querySelectorAll('.camp-item').forEach(function(i){ i.classList.remove('active'); });
+  var el = document.getElementById('ci_'+id);
+  if (el) el.classList.add('active');
+  if (c.imagen_url) {
+    document.getElementById('prevImg').src           = c.imagen_url;
+    document.getElementById('prevImg').style.display = 'block';
+    document.getElementById('imgPreviewSmall').src           = c.imagen_url;
+    document.getElementById('imgPreviewSmall').style.display = 'block';
+    document.getElementById('dropLabel').style.display  = 'none';
+    document.getElementById('btnQuitarImg').style.display = '';
+  } else {
+    quitarImg();
+  }
+  updatePreview();
+  hideAlerts();
+}
+
+async function guardar() {
+  var nombre  = document.getElementById('cNombre').value.trim();
+  var mensaje = document.getElementById('cMensaje').value.trim();
+  if (!nombre)  return showErr('El nombre es requerido');
+  if (!mensaje) return showErr('El mensaje es requerido');
+
+  var btn = document.getElementById('btnGuardar');
+  btn.disabled = true; btn.textContent = '⏳ Guardando...';
+
+  var fd = new FormData();
+  fd.append('nombre',  nombre);
+  fd.append('mensaje', mensaje);
+  if (imgFile) fd.append('imagen', imgFile);
+
+  try {
+    var url    = editId ? '/api/campanas/'+editId : '/api/campanas';
+    var method = editId ? 'PUT' : 'POST';
+    var r    = await fetch(url, { method: method, body: fd });
+    var data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'Error desconocido');
+    showOk(editId ? '✅ Campaña actualizada' : '✅ Campaña creada');
+    await loadCampanas();
+    if (!editId) nueva();
+  } catch(e) {
+    showErr('❌ ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '💾 Guardar';
+}
+
+async function eliminar(id) {
+  if (!confirm('¿Eliminar esta campaña?')) return;
+  try {
+    await fetch('/api/campanas/'+id, { method: 'DELETE' });
+    await loadCampanas();
+    nueva();
+    showOk('✅ Campaña eliminada');
+  } catch(e) {
+    showErr('❌ ' + e.message);
+  }
+}
+
+function insertVar(v) {
+  var ta  = document.getElementById('cMensaje');
+  var pos = ta.selectionStart;
+  ta.value = ta.value.slice(0, pos) + v + ta.value.slice(ta.selectionEnd);
+  ta.selectionStart = ta.selectionEnd = pos + v.length;
+  ta.focus();
   updatePreview();
 }
-async function guardar(){
-  const nombre=document.getElementById('cNombre').value.trim(), mensaje=document.getElementById('cMensaje').value.trim();
-  if(!nombre||!mensaje) return alert('Nombre y mensaje requeridos');
-  const fd=new FormData(); fd.append('nombre',nombre); fd.append('mensaje',mensaje);
-  if(imgFile) fd.append('imagen',imgFile);
-  const r=await fetch(editId?`/api/campanas/${editId}`:'/api/campanas',{method:editId?'PUT':'POST',body:fd});
-  const d=await r.json(); if(!d.ok) return alert('Error: '+d.error);
-  loadCampanas(); if(!editId) nueva();
+
+function updatePreview() {
+  var msg = document.getElementById('cMensaje').value || 'Tu mensaje aparecerá aquí...';
+  document.getElementById('prevText').textContent = msg
+    .replace(/{{nombre}}/g,       '[Nombre del negocio]')
+    .replace(/{{telefono}}/g,     '[Teléfono]')
+    .replace(/{{distrito}}/g,     '[Distrito]')
+    .replace(/{{provincia}}/g,    '[Provincia]')
+    .replace(/{{departamento}}/g, '[Departamento]');
 }
-async function eliminar(id){ if(!confirm('¿Eliminar?'))return; await fetch(`/api/campanas/${id}`,{method:'DELETE'}); loadCampanas(); nueva(); }
-function insertVar(v){ const ta=document.getElementById('cMensaje'); const pos=ta.selectionStart; ta.value=ta.value.slice(0,pos)+v+ta.value.slice(ta.selectionEnd); ta.focus(); updatePreview(); }
-function updatePreview(){ const msg=document.getElementById('cMensaje').value||'Tu mensaje aquí...'; document.getElementById('prevText').textContent=msg.replace(/{{nombre}}/g,'[Nombre]').replace(/{{telefono}}/g,'[Tel]').replace(/{{distrito}}/g,'[Distrito]').replace(/{{provincia}}/g,'[Provincia]'); }
-function handleFile(file){ if(!file)return; imgFile=file; const url=URL.createObjectURL(file); document.getElementById('prevImg').src=url; document.getElementById('prevImg').style.display='block'; document.getElementById('imgPreviewSmall').src=url; document.getElementById('imgPreviewSmall').style.display='block'; document.getElementById('dropLabel').style.display='none'; document.getElementById('btnQuitarImg').style.display=''; }
-function handleDrop(e){ e.preventDefault(); document.getElementById('dropArea').classList.remove('drag'); const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) handleFile(f); }
-function quitarImg(){ imgFile=null; document.getElementById('prevImg').style.display='none'; document.getElementById('imgPreviewSmall').style.display='none'; document.getElementById('dropLabel').style.display=''; document.getElementById('btnQuitarImg').style.display='none'; document.getElementById('imgInput').value=''; }
+
+function handleFile(file) {
+  if (!file) return;
+  imgFile = file;
+  var url = URL.createObjectURL(file);
+  document.getElementById('prevImg').src           = url;
+  document.getElementById('prevImg').style.display = 'block';
+  document.getElementById('imgPreviewSmall').src           = url;
+  document.getElementById('imgPreviewSmall').style.display = 'block';
+  document.getElementById('dropLabel').style.display  = 'none';
+  document.getElementById('btnQuitarImg').style.display = '';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropArea').classList.remove('drag');
+  var f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) handleFile(f);
+}
+
+function quitarImg() {
+  imgFile = null;
+  document.getElementById('prevImg').src           = '';
+  document.getElementById('prevImg').style.display = 'none';
+  document.getElementById('imgPreviewSmall').style.display = 'none';
+  document.getElementById('dropLabel').style.display       = '';
+  document.getElementById('btnQuitarImg').style.display    = 'none';
+  document.getElementById('imgInput').value = '';
+}
+
+function showOk(m)  { var e=document.getElementById('alertOk');  e.textContent=m; e.style.display='block'; setTimeout(function(){e.style.display='none';},4000); }
+function showErr(m) { var e=document.getElementById('alertErr'); e.textContent=m; e.style.display='block'; }
+function hideAlerts(){ document.getElementById('alertOk').style.display='none'; document.getElementById('alertErr').style.display='none'; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 loadCampanas();
 </script></body></html>
