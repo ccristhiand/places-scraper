@@ -266,9 +266,12 @@ async function enviarMensaje({ numero, texto, imagenPath, negocioId }) {
       negocioId,
       numero: numero.replace(/[^0-9]/g,'')
     });
+    console.log('  ✓ Cache guardado:', result.key.id, '→ negocio', negocioId);
     if (mensajesEnviados.size > 500) {
       mensajesEnviados.delete(mensajesEnviados.keys().next().value);
     }
+  } else {
+    console.log('  ⚠️ Cache NO guardado — result.key.id:', result?.key?.id, 'negocioId:', negocioId);
   }
 
   return result;

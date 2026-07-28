@@ -209,10 +209,12 @@ async function enviarEnBackground(campana, negocio_ids, estado_destino) {
         continue;
       }
 
-      await wa.enviarMensaje({ numero: envio.numero, texto: envio.mensaje_final, imagenPath, negocioId: nid });
+      const waResult = await wa.enviarMensaje({ numero: envio.numero, texto: envio.mensaje_final, imagenPath, negocioId: nid });
       await db.execute('UPDATE envios SET estado="enviado",enviado_at=NOW() WHERE id=?', [envio.id]);
-      await db.execute('INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
-        [nid, envio.numero, 'saliente', envio.mensaje_final]);
+      // Guardar mensaje — cuando llegue el evento saliente ya tendrá el wa_jid correcto
+      // pero por si acaso también guardamos aquí directamente con negocio_id
+      await db.execute('INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido,wa_id) VALUES (?,?,?,?,?)',
+        [nid, envio.numero, 'saliente', envio.mensaje_final, waResult?.key?.id||null]);
       await db.execute('INSERT INTO crm_historial (negocio_id,tipo,contenido) VALUES (?,?,?)',
         [nid, 'mensaje', `Enviado: ${campana.nombre}`]);
 
