@@ -1,241 +1,132 @@
-const {
-  default: makeWASocket,
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  isJidBroadcast
-} = require('@whiskeysockets/baileys');
-const pino   = require('pino');
-const QRCode = require('qrcode');
-const path   = require('path');
-const fs     = require('fs');
-const db     = require('./db');
+const express = require('express');
+const router  = express.Router();
+const db      = require('../db');
+const wa      = require('../whatsapp');
 
-const AUTH_DIR = path.join(__dirname, '../.wa_auth');
-let sock             = null;
-let io               = null;
-let waStatus         = 'desconectado';
-let reconnectAttempts = 0;
-let lastQR           = null;
-
-function setIO(socketIO) { io = socketIO; }
-function getStatus()     { return waStatus; }
-function getQR()         { return lastQR; }
-function emit(event, data) { if (io) io.emit(event, data); }
-
-function normalizarNumero(tel) {
-  if (!tel) return '';
-  let n = tel.replace(/[^0-9]/g, '');
-  if (n.startsWith('51') && n.length === 11) n = n.slice(2);
+function limpiarNumero(tel) {
+  if (!tel) return null;
+  const n = tel.replace(/[^0-9]/g, '');
+  if (n.length < 8) return null;
+  if (n.startsWith('51')) return n;
+  if (n.startsWith('9') && n.length === 9) return '51' + n;
   return n;
 }
 
-async function buscarNegocioPorNumero(numero) {
-  const normalizado = normalizarNumero(numero);
-  const con51       = '51' + normalizado;
-  const ultimos9    = normalizado.slice(-9);
+// GET /api/chat — lista de conversaciones
+router.get('/', async (req, res) => {
   try {
+    // Incluye tanto mensajes asociados a negocio como huérfanos por número
     const [rows] = await db.execute(`
-      SELECT id, nombre FROM negocios
-      WHERE REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),'+',''),' ',''),'-','')     IN (?,?,?)
-         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono_int,''),'+',''),' ',''),'-','') IN (?,?,?)
-         OR REPLACE(REPLACE(REPLACE(COALESCE(telefono,''),'+',''),' ',''),'-','')     IN (?,?,?)
-      LIMIT 1
-    `, [con51,normalizado,ultimos9, con51,normalizado,ultimos9, con51,normalizado,ultimos9]);
-    if (rows[0]) console.log('  → Negocio encontrado:', rows[0].nombre);
-    else         console.log('  → Sin negocio para número:', numero, '/ norm:', normalizado);
-    return rows[0] || null;
-  } catch(e) {
-    console.error('  → Error buscando negocio:', e.message);
-    return null;
+      SELECT
+        n.id,
+        n.nombre,
+        n.telefono,
+        n.distrito,
+        MAX(m.created_at)   AS ultimo_msg,
+        SUM(CASE WHEN m.direccion='entrante' AND m.leido=0 THEN 1 ELSE 0 END) AS no_leidos,
+        SUBSTRING((
+          SELECT contenido FROM chat_mensajes cm2
+          WHERE cm2.negocio_id = n.id
+          ORDER BY cm2.created_at DESC LIMIT 1
+        ), 1, 60) AS ultimo_texto
+      FROM chat_mensajes m
+      JOIN negocios n ON n.id = m.negocio_id
+      WHERE m.negocio_id IS NOT NULL
+      GROUP BY n.id, n.nombre, n.telefono, n.distrito
+      ORDER BY ultimo_msg DESC
+      LIMIT 100
+    `);
+
+    // También mensajes sin negocio asociado (por número desconocido)
+    const [huerfanos] = await db.execute(`
+      SELECT
+        0 AS id,
+        m.numero AS nombre,
+        m.numero AS telefono,
+        NULL AS distrito,
+        MAX(m.created_at) AS ultimo_msg,
+        SUM(CASE WHEN m.direccion='entrante' AND m.leido=0 THEN 1 ELSE 0 END) AS no_leidos,
+        SUBSTRING(( SELECT contenido FROM chat_mensajes cm3
+          WHERE cm3.numero = m.numero AND cm3.negocio_id IS NULL
+          ORDER BY cm3.created_at DESC LIMIT 1 ), 1, 60) AS ultimo_texto
+      FROM chat_mensajes m
+      WHERE m.negocio_id IS NULL
+      GROUP BY m.numero
+      ORDER BY ultimo_msg DESC
+      LIMIT 20
+    `);
+
+    const todos = [...rows, ...huerfanos].sort((a,b) => new Date(b.ultimo_msg) - new Date(a.ultimo_msg));
+    res.json({ ok: true, rows: todos });
+  } catch (e) {
+    console.error('GET /api/chat error:', e.message);
+    res.status(500).json({ error: e.message });
   }
-}
+});
 
-// Extraer texto de cualquier tipo de mensaje
-function extraerTexto(msg) {
-  const m = msg.message;
-  if (!m) return null;
+// GET /api/chat/:negocioId
+router.get('/:negocioId', async (req, res) => {
+  try {
+    const nid = parseInt(req.params.negocioId);
+    if (isNaN(nid)) return res.json({ ok: true, msgs: [] });
 
-  if (m.conversation)                      return m.conversation;
-  if (m.extendedTextMessage?.text)         return m.extendedTextMessage.text;
-  if (m.imageMessage?.caption)             return m.imageMessage.caption || '📷 [imagen]';
-  if (m.videoMessage?.caption)             return m.videoMessage.caption || '🎥 [video]';
-  if (m.documentMessage?.caption)          return m.documentMessage.caption || '📄 [documento]';
-  if (m.documentMessage)                   return '📄 [documento]';
-  if (m.imageMessage)                      return '📷 [imagen]';
-  if (m.videoMessage)                      return '🎥 [video]';
-  if (m.audioMessage)                      return '🎵 [audio]';
-  if (m.stickerMessage)                    return '🎉 [sticker]';
-  if (m.reactionMessage)                   return `${m.reactionMessage.text||'👍'} [reacción]`;
-  if (m.locationMessage)                   return '📍 [ubicación]';
-  if (m.contactMessage)                    return '👤 [contacto]';
-  if (m.buttonsResponseMessage?.selectedDisplayText) return m.buttonsResponseMessage.selectedDisplayText;
-  if (m.listResponseMessage?.title)        return m.listResponseMessage.title;
-  return '[mensaje]';
-}
+    const [[negocio]] = await db.execute('SELECT * FROM negocios WHERE id=?', [nid]);
+    if (!negocio) return res.json({ ok: true, msgs: [] });
 
-async function connect() {
-  if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+    const numero = limpiarNumero(negocio.whatsapp || negocio.telefono_int || negocio.telefono);
 
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  const { version }          = await fetchLatestBaileysVersion();
+    if (numero) {
+      const numCorto = numero.startsWith('51') ? numero.slice(2) : numero;
+      const numLargo = numero.startsWith('51') ? numero : '51' + numero;
 
-  waStatus = 'conectando';
-  emit('wa:status', { status: waStatus });
-
-  sock = makeWASocket({
-    version,
-    auth:                  state,
-    logger:                pino({ level: 'silent' }),
-    printQRInTerminal:     true,
-    browser:               ['Places CRM', 'Chrome', '1.0'],
-    connectTimeoutMs:      60000,
-    keepAliveIntervalMs:   25000,
-    retryRequestDelayMs:   2000,
-    // Importante: recibir mensajes propios (enviados desde el celular)
-    shouldIgnoreJid:       jid => isJidBroadcast(jid),
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      waStatus = 'qr';
-      try {
-        const qrImg = await QRCode.toDataURL(qr);
-        lastQR = qrImg;
-        emit('wa:qr', { qr: qrImg });
-      } catch(e) {}
-      emit('wa:status', { status: 'qr' });
-      console.log('📱 QR generado');
+      // Asociar mensajes huérfanos — buscar por todas las variantes del número
+      await db.execute(`
+        UPDATE chat_mensajes SET negocio_id=?
+        WHERE negocio_id IS NULL
+          AND REPLACE(REPLACE(REPLACE(numero,'+',''),' ',''),'-','') IN (?,?,?)
+      `, [nid, numLargo, numCorto, numero]);
     }
-    if (connection === 'open') {
-      waStatus = 'conectado';
-      reconnectAttempts = 0;
-      emit('wa:status', { status: 'conectado', numero: sock.user?.id });
-      console.log('✅ WhatsApp conectado:', sock.user?.id);
-    }
-    if (connection === 'close') {
-      const code      = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = code === DisconnectReason.loggedOut;
-      console.log(`⚠️ Conexión cerrada. Código: ${code}`);
-      if (loggedOut) {
-        console.log('❌ Sesión cerrada — escanea QR nuevamente');
-        waStatus = 'desconectado';
-        emit('wa:status', { status: 'desconectado' });
-        if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-      } else {
-        reconnectAttempts++;
-        const delay = Math.min(3000 * reconnectAttempts, 30000);
-        console.log(`🔄 Reconectando en ${delay/1000}s (intento ${reconnectAttempts})...`);
-        waStatus = 'conectando';
-        emit('wa:status', { status: 'conectando' });
-        setTimeout(connect, delay);
-      }
-    }
-  });
 
-  // ── Todos los mensajes: entrantes Y enviados desde el celular ────────────
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // 'notify' = mensajes nuevos en tiempo real
-    // 'append' = historial al conectar (ignorar para no inundar la BD)
-    if (type !== 'notify') return;
+    // Traer todos los mensajes del negocio
+    const [msgs] = await db.execute(
+      'SELECT * FROM chat_mensajes WHERE negocio_id=? ORDER BY created_at ASC',
+      [nid]
+    );
 
-    for (const msg of messages) {
-      try {
-        if (!msg.key.remoteJid) continue;
-        if (msg.key.remoteJid.endsWith('@g.us'))  continue; // ignorar grupos
-        if (msg.key.remoteJid.endsWith('@lid'))   continue; // ignorar IDs internos de WA
-        if (isJidBroadcast(msg.key.remoteJid))    continue; // ignorar broadcast
-        if (!msg.message)                         continue;
+    // Marcar entrantes como leídos
+    await db.execute(
+      'UPDATE chat_mensajes SET leido=1 WHERE negocio_id=? AND direccion="entrante" AND leido=0',
+      [nid]
+    );
 
-        const esMio  = !!msg.key.fromMe;
-
-        // Obtener número real — si es saliente el número es el destinatario
-        let numero = msg.key.remoteJid
-          .replace('@s.whatsapp.net', '')
-          .replace('@c.us', '');
-
-        // Sanity check: debe ser numérico
-        if (!/^[0-9]+$/.test(numero)) {
-          console.log(`  ↩ JID no numérico ignorado: ${msg.key.remoteJid}`);
-          continue;
-        }
-
-        const texto  = extraerTexto(msg);
-
-        if (!texto) continue;
-
-        console.log(`${esMio ? '📤 Enviado' : '📩 Recibido'} ${esMio ? 'a' : 'de'} ${numero}: ${texto.substring(0,60)}`);
-
-        // Verificar duplicado por wa_id
-        if (msg.key.id) {
-          const [[existe]] = await db.execute(
-            'SELECT id FROM chat_mensajes WHERE wa_id=? LIMIT 1',
-            [msg.key.id]
-          );
-          if (existe) {
-            console.log(`  ↩ Duplicado ignorado`);
-            continue;
-          }
-        }
-
-        // Buscar negocio por número
-        const negocio   = await buscarNegocioPorNumero(numero);
-        const negocioId = negocio?.id || null;
-
-        const direccion = esMio ? 'saliente' : 'entrante';
-
-        // Guardar en BD
-        console.log(`  → Guardando ${direccion} — negocio_id=${negocioId}, numero=${numero}`);
-        await db.execute(
-          'INSERT INTO chat_mensajes (negocio_id, numero, direccion, contenido, wa_id) VALUES (?,?,?,?,?)',
-          [negocioId, numero, direccion, texto, msg.key.id || null]
-        );
-        console.log(`  ✓ Guardado OK`);
-
-        // Emitir en tiempo real al panel
-        if (!esMio) {
-          emit('wa:mensaje_entrante', {
-            numero,
-            texto,
-            negocioId,
-            negocioNombre: negocio?.nombre || numero,
-            ts: new Date()
-          });
-        } else {
-          emit('wa:mensaje_saliente', {
-            numero,
-            texto,
-            negocioId,
-            ts: new Date()
-          });
-        }
-
-      } catch(e) {
-        console.error('  ✗ Error procesando mensaje:', e.message);
-      }
-    }
-  });
-}
-
-async function enviarMensaje({ numero, texto, imagenPath }) {
-  if (!sock || waStatus !== 'conectado') throw new Error('WhatsApp no conectado');
-  const jid = numero.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-  if (imagenPath && fs.existsSync(imagenPath)) {
-    await sock.sendMessage(jid, { image: { url: imagenPath }, caption: texto || '' });
-  } else {
-    await sock.sendMessage(jid, { text: texto });
+    res.json({ ok: true, msgs });
+  } catch (e) {
+    console.error('GET /api/chat/:id error:', e.message);
+    res.status(500).json({ error: e.message });
   }
-}
+});
 
-async function desconectar() {
-  try { if (sock) await sock.logout(); } catch(_) {}
-  if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-  waStatus = 'desconectado';
-  sock     = null;
-  lastQR   = null;
-  emit('wa:status', { status: 'desconectado' });
-}
+// POST /api/chat/:negocioId/enviar
+router.post('/:negocioId/enviar', async (req, res) => {
+  const { texto } = req.body;
+  const nid = req.params.negocioId;
+  if (!texto?.trim()) return res.status(400).json({ error: 'Mensaje vacío' });
+  try {
+    const [[n]] = await db.execute('SELECT * FROM negocios WHERE id=?', [nid]);
+    if (!n) return res.status(404).json({ error: 'Negocio no encontrado' });
+    const numero = limpiarNumero(n.whatsapp || n.telefono_int || n.telefono);
+    if (!numero) return res.status(400).json({ error: 'Sin número WhatsApp. Agrégalo en Contactos primero.' });
 
-module.exports = { connect, enviarMensaje, desconectar, setIO, getStatus, getQR };
+    await wa.enviarMensaje({ numero, texto });
+    await db.execute(
+      'INSERT INTO chat_mensajes (negocio_id,numero,direccion,contenido) VALUES (?,?,?,?)',
+      [nid, numero, 'saliente', texto]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('POST /api/chat/enviar error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+module.exports = router;
