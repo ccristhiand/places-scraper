@@ -137,32 +137,51 @@ async function connect() {
 
   // ── Todos los mensajes: entrantes Y enviados desde el celular ────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // 'notify' = mensajes nuevos en tiempo real
-    // 'append' = historial al conectar (ignorar para no inundar la BD)
     if (type !== 'notify') return;
 
     for (const msg of messages) {
       try {
         if (!msg.key.remoteJid) continue;
-        if (msg.key.remoteJid.endsWith('@g.us'))  continue; // ignorar grupos
-        if (msg.key.remoteJid.endsWith('@lid'))   continue; // ignorar IDs internos de WA
-        if (isJidBroadcast(msg.key.remoteJid))    continue; // ignorar broadcast
-        if (!msg.message)                         continue;
+        if (msg.key.remoteJid.endsWith('@g.us')) continue; // ignorar grupos
+        if (isJidBroadcast(msg.key.remoteJid))  continue; // ignorar broadcast
+        if (!msg.message)                        continue;
 
-        const esMio  = !!msg.key.fromMe;
+        const esMio = !!msg.key.fromMe;
+        const jid   = msg.key.remoteJid;
 
-        // Obtener número real — si es saliente el número es el destinatario
-        let numero = msg.key.remoteJid
-          .replace('@s.whatsapp.net', '')
-          .replace('@c.us', '');
+        // Resolver número real desde el mensaje
+        // WA multi-dispositivo puede entregar @lid en vez de @s.whatsapp.net
+        let numero = null;
 
-        // Sanity check: debe ser numérico
-        if (!/^[0-9]+$/.test(numero)) {
-          console.log(`  ↩ JID no numérico ignorado: ${msg.key.remoteJid}`);
+        if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@c.us')) {
+          // Formato normal — extraer número directo
+          numero = jid.replace('@s.whatsapp.net','').replace('@c.us','');
+        } else if (jid.endsWith('@lid')) {
+          // LID — intentar obtener número real desde los metadatos del mensaje
+          numero = msg.verifiedBizAccount ||
+                   msg.message?.extendedTextMessage?.contextInfo?.participant?.replace('@s.whatsapp.net','') ||
+                   null;
+
+          // Si no hay metadata, buscar en el pushName o notifyName
+          if (!numero && msg.pushName) {
+            console.log(`  ↩ @lid sin número real, pushName: ${msg.pushName} — guardando con JID`);
+            numero = jid; // guardar como fallback para no perder el mensaje
+          }
+
+          if (!numero) {
+            console.log(`  ↩ @lid sin número resoluble, ignorando: ${jid}`);
+            continue;
+          }
+        } else {
+          console.log(`  ↩ JID desconocido ignorado: ${jid}`);
           continue;
         }
 
-        const texto  = extraerTexto(msg);
+        // Limpiar número
+        numero = String(numero).replace(/[^0-9]/g, '');
+        if (numero.length < 7) { console.log(`  ↩ Número muy corto: ${numero}`); continue; }
+
+        const texto = extraerTexto(msg);
 
         if (!texto) continue;
 
