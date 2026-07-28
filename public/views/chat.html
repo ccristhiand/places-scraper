@@ -115,6 +115,13 @@ socket.on('wa:status', ({ status }) => {
 });
 
 // ── EVENTO CLAVE: mensaje entrante en tiempo real ────────────────────────────
+socket.on('wa:mensaje_saliente', ({ numero, texto, negocioId, ts }) => {
+  if (negocioId && negocioId === activoId) {
+    appendBubble({ direccion: 'saliente', contenido: texto, created_at: ts || new Date(), nuevo: true });
+  }
+  loadContacts();
+});
+
 socket.on('wa:mensaje_entrante', ({ numero, texto, negocioId, ts }) => {
   // Refrescar lista de contactos siempre
   loadContacts();
