@@ -115,6 +115,7 @@ input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:14px;height
     <div class="sel-actions">
       <span class="sel-count" id="selCount" style="display:none"></span>
       <button id="btnElimSel" onclick="eliminarSeleccionados()" style="display:none;height:26px;padding:0 10px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Eliminar seleccionados</button>
+      <button onclick="verificarSeleccionados()" style="height:26px;padding:0 10px;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;cursor:pointer;background:#f0fdf4;color:#15803d">✅ Verificar WA</button>
       <button onclick="selAll()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">☑ Seleccionar página</button>
       <button onclick="deselAll()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">✕ Deseleccionar</button>
     </div>
@@ -348,6 +349,7 @@ async function load() {
       '<td><input type="checkbox" class="rowchk" data-id="'+r.id+'" '+(selIds.has(r.id)?'checked':'')+' onchange="togSel(this)"></td>' +
       '<td style="color:var(--faint);font-size:11px;font-family:monospace">#'+r.id+'</td>' +
       '<td><b style="font-size:12px">'+esc(r.nombre)+'</b>' +
+        (r.wa_verificado===1?'<span style="font-size:10px;color:#15803d;margin-left:4px">✅WA</span>':r.wa_verificado===0?'<span style="font-size:10px;color:#dc2626;margin-left:4px">❌WA</span>':'') +
         (sinNumero ? '<br><span class="badge b-warn" style="margin-top:2px">⚠️ Sin número</span>' : '') +
       '</td>' +
       '<td>' +
@@ -583,6 +585,46 @@ function irChat() { if (!activo) return; window.parent.postMessage({nav:'chat',i
 
 // ── Utilidades ────────────────────────────────────────────────────────────────
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Verificar WA ─────────────────────────────────────────────────────────────
+var verificandoWA = false;
+
+async function verificarSeleccionados() {
+  if (!selIds.size) return alert('Selecciona contactos primero');
+  if (verificandoWA) return alert('Ya hay una verificación en curso');
+  if (!confirm('¿Verificar WhatsApp de '+selIds.size+' contactos seleccionados?\n\nEsto puede tomar unos minutos.')) return;
+
+  verificandoWA = true;
+  var banner = document.getElementById('verificarBanner');
+  if (banner) banner.style.display = 'block';
+
+  var r = await fetch('/api/verificar/lote', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ negocio_ids: Array.from(selIds), solo_sin_verificar: false })
+  });
+  var d = await r.json();
+  if (!d.ok) { alert('Error: '+d.error); verificandoWA = false; return; }
+  alert('✅ Verificación iniciada para '+d.total+' contactos. Los resultados aparecerán automáticamente.');
+}
+
+async function verificarSinVerificar() {
+  if (verificandoWA) return alert('Ya hay una verificación en curso');
+  var stats = await fetch('/api/verificar/stats').then(function(r){return r.json();}).catch(function(){return {};});
+  var sinVer = stats.stats?.sin_verificar || 0;
+  if (!sinVer) return alert('Todos los contactos ya fueron verificados');
+  if (!confirm('¿Verificar '+sinVer+' contactos sin verificar? (máx. 50 por lote)')) return;
+
+  verificandoWA = true;
+  var r = await fetch('/api/verificar/lote', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ solo_sin_verificar: true })
+  });
+  var d = await r.json();
+  if (!d.ok) { alert('Error: '+d.error); verificandoWA = false; return; }
+  alert('✅ '+d.msg);
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function initFiltros() {

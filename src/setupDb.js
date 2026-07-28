@@ -24,6 +24,7 @@ async function setup() {
       telefono_int   VARCHAR(100),
       whatsapp       VARCHAR(50),
       wa_jid         VARCHAR(50),
+      wa_verificado  TINYINT(1) DEFAULT NULL COMMENT '1=tiene WA, 0=no tiene, NULL=sin verificar',
       website        VARCHAR(500),
       direccion      TEXT,
       rating         DECIMAL(3,1),
@@ -175,6 +176,7 @@ async function setup() {
 
   // ── Columnas adicionales si ya existe la BD ───────────────────────────────
   try { await conn.query(`ALTER TABLE negocios ADD COLUMN IF NOT EXISTS wa_jid VARCHAR(50) NULL DEFAULT NULL`); } catch(e) {}
+  try { await conn.query(`ALTER TABLE negocios ADD COLUMN IF NOT EXISTS wa_verificado TINYINT(1) DEFAULT NULL`); } catch(e) {}
   try { await conn.query(`ALTER TABLE negocios ADD INDEX IF NOT EXISTS idx_wa_jid (wa_jid)`); } catch(e) {}
   try { await conn.query(`ALTER TABLE envios ADD COLUMN IF NOT EXISTS estado_destino VARCHAR(50) NULL DEFAULT NULL`); } catch(e) {}
   try { await conn.query(`ALTER TABLE chat_mensajes ADD INDEX IF NOT EXISTS idx_wa_id (wa_id)`); } catch(e) {}

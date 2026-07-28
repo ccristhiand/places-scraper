@@ -64,6 +64,15 @@
       <div id="campPreview" style="display:none;background:#e5ddd5;border-radius:8px;padding:.75rem;margin-bottom:.75rem;font-size:12px;line-height:1.5;white-space:pre-wrap;max-height:80px;overflow-y:auto"></div>
 
       <div class="field">
+        <label>Filtro WhatsApp</label>
+        <select id="fWA" style="height:36px;border:1px solid var(--border);border-radius:8px;font-size:13px;padding:0 10px">
+          <option value="">Todos los contactos</option>
+          <option value="1" selected>✅ Solo verificados con WA</option>
+          <option value="0">❌ Solo sin WhatsApp</option>
+          <option value="null">⬜ Sin verificar</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Estado CRM</label>
         <select id="fEstado">
           <option value="">Todos los estados</option>
@@ -261,9 +270,13 @@ async function loadContactos() {
   var estado = document.getElementById('fEstado').value;
   var dep    = document.getElementById('fDep').value;
 
+  var wa_filter = document.getElementById('fWA').value;
   var url = '/api/negocios?limit=500';
-  if (estado) url += '&estado_crm=' + encodeURIComponent(estado);
-  if (dep)    url += '&dep='        + encodeURIComponent(dep);
+  if (estado)    url += '&estado_crm='    + encodeURIComponent(estado);
+  if (dep)       url += '&dep='           + encodeURIComponent(dep);
+  if (wa_filter === '1') url += '&wa_verificado=1';
+  else if (wa_filter === '0') url += '&wa_verificado=0';
+  else if (wa_filter === 'null') url += '&wa_verificado=null';
 
   logMsg('Cargando contactos...', 'log-info');
 

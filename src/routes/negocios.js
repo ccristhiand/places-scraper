@@ -98,7 +98,7 @@ router.post('/guardar', async (req, res) => {
 // GET /api/negocios
 router.get('/', async (req, res) => {
   try {
-    const { dep, prov, dist, rubro, estado_crm, q, sin_numero, limit = 20, offset = 0 } = req.query;
+    const { dep, prov, dist, rubro, estado_crm, q, sin_numero, wa_verificado, limit = 20, offset = 0 } = req.query;
     const where = ['1=1'], vals = [];
     if (dep)        { where.push('departamento=?');        vals.push(dep); }
     if (prov)       { where.push('provincia=?');           vals.push(prov); }
@@ -109,6 +109,9 @@ router.get('/', async (req, res) => {
     if (sin_numero === '1') {
       where.push('(telefono IS NULL OR telefono = "") AND (telefono_int IS NULL OR telefono_int = "") AND (whatsapp IS NULL OR whatsapp = "")');
     }
+    if (wa_verificado === '1')    { where.push('wa_verificado = 1'); }
+    if (wa_verificado === '0')    { where.push('wa_verificado = 0'); }
+    if (wa_verificado === 'null') { where.push('wa_verificado IS NULL'); }
     const lim = Math.min(parseInt(limit) || 20, 500);
     const off = parseInt(offset) || 0;
     const [rows] = await db.execute(

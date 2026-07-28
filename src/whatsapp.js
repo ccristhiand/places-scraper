@@ -285,4 +285,31 @@ async function desconectar() {
   emit('wa:status', { status: 'desconectado' });
 }
 
-module.exports = { connect, enviarMensaje, desconectar, setIO, getStatus, getQR };
+module.exports = { connect, enviarMensaje, desconectar, setIO, getStatus, getQR, verificarNumero, verificarNumeros };
+
+// Verificar si un número tiene WhatsApp activo
+async function verificarNumero(numero) {
+  if (!sock || waStatus !== 'conectado') throw new Error('WhatsApp no conectado');
+  try {
+    const numLimpio = numero.replace(/[^0-9]/g, '');
+    const numLargo  = numLimpio.startsWith('51') ? numLimpio : '51' + numLimpio;
+    const [result]  = await sock.onWhatsApp(numLargo + '@s.whatsapp.net');
+    return result?.exists || false;
+  } catch(e) {
+    return false;
+  }
+}
+
+// Verificar múltiples números en lote
+async function verificarNumeros(numeros) {
+  const resultados = {};
+  for (const numero of numeros) {
+    try {
+      resultados[numero] = await verificarNumero(numero);
+      await new Promise(r => setTimeout(r, 1500)); // delay para no saturar
+    } catch(e) {
+      resultados[numero] = false;
+    }
+  }
+  return resultados;
+}

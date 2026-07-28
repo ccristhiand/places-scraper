@@ -42,6 +42,7 @@ app.use('/api/demos',    require('./routes/demos'));
 app.use('/api/chat',     require('./routes/chat'));
 app.use('/api/leads',    require('./routes/leads'));
 app.use('/api/config',   require('./routes/config'));
+app.use('/api/verificar', require('./routes/verificar'));
 
 app.get('/api/wa/status', (req, res) => res.json({ status: wa.getStatus() }));
 app.get('/api/wa/qr', (req, res) => {
