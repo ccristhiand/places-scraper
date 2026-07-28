@@ -5,7 +5,31 @@ const db      = require('../db');
 const wa      = require('../whatsapp');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const DELAY = 10000;
+
+// Config dinámica desde BD
+async function getConfig() {
+  try {
+    const [rows] = await db.execute('SELECT clave, valor FROM configuracion');
+    const cfg = {};
+    rows.forEach(r => cfg[r.clave] = r.valor);
+    return {
+      delay:        parseInt(cfg.delay_entre_mensajes) || 20000,
+      limiteDiario: parseInt(cfg.limite_diario)        || 200,
+      horaInicio:   parseInt(cfg.hora_inicio)          || 9,
+      horaFin:      parseInt(cfg.hora_fin)             || 19,
+      activo:       cfg.envios_activo !== '0'
+    };
+  } catch(e) {
+    return { delay: 20000, limiteDiario: 200, horaInicio: 9, horaFin: 19, activo: true };
+  }
+}
+
+async function getEnviadosHoy() {
+  const [[r]] = await db.execute(
+    'SELECT COUNT(*) as total FROM envios WHERE estado="enviado" AND DATE(enviado_at) = CURDATE()'
+  );
+  return r.total || 0;
+}
 
 function limpiarNumero(tel) {
   if (!tel) return null;
@@ -195,6 +219,36 @@ async function enviarEnBackground(campana, negocio_ids, estado_destino) {
   const imagenPath = campana.imagen_url ? path.join(__dirname, '../../', campana.imagen_url) : null;
 
   for (const nid of negocio_ids) {
+    // Verificar config antes de cada mensaje
+    const cfg = await getConfig();
+
+    // ── Control: envíos desactivados ──────────────────────────────────────
+    if (!cfg.activo) {
+      if (io) io.emit('envio:control', { tipo: 'desactivado', msg: '⛔ Envíos desactivados desde el panel de configuración.' });
+      console.log('⛔ Envíos desactivados por config');
+      break;
+    }
+
+    // ── Control: horario ──────────────────────────────────────────────────
+    const horaActual = new Date().getHours();
+    if (horaActual < cfg.horaInicio || horaActual >= cfg.horaFin) {
+      const msg = `⏰ Fuera de horario permitido (${cfg.horaInicio}:00 - ${cfg.horaFin}:00). Envío pausado.`;
+      if (io) io.emit('envio:control', { tipo: 'horario', msg });
+      console.log(msg);
+      break;
+    }
+
+    // ── Control: límite diario ────────────────────────────────────────────
+    const enviadosHoy = await getEnviadosHoy();
+    if (enviadosHoy >= cfg.limiteDiario) {
+      const msg = `🚫 Límite diario alcanzado: ${enviadosHoy}/${cfg.limiteDiario} mensajes. Reintenta mañana.`;
+      if (io) io.emit('envio:control', { tipo: 'limite', msg });
+      console.log(msg);
+      break;
+    }
+
+    // Mostrar progreso del límite diario
+    if (io) io.emit('envio:limite', { enviados: enviadosHoy, limite: cfg.limiteDiario });
     try {
       const [[envio]] = await db.execute(
         `SELECT e.*, n.nombre FROM envios e JOIN negocios n ON n.id=e.negocio_id
@@ -236,18 +290,25 @@ async function enviarEnBackground(campana, negocio_ids, estado_destino) {
 
       if (io) io.emit('envio:progreso', { id: envio.id, estado: 'enviado', nombre: envio.nombre });
       console.log(`✓ Enviado a ${envio.nombre}`);
-      await sleep(DELAY);
+      await sleep(cfg.delay);
 
     } catch (e) {
       console.error(`✗ Error enviando a negocio ${nid}:`, e.message);
+      // Errores de conexión/WA → pendiente para reintentar
+      // Errores de número inválido → fallido definitivo
+      const esErrorDefinitivo = e.message.includes('not-authorized') ||
+                                 e.message.includes('invalid') ||
+                                 e.message.includes('does not exist') ||
+                                 e.message.includes('blocked');
+      const nuevoEstado = esErrorDefinitivo ? 'fallido' : 'pendiente';
       try {
         const [[envio]] = await db.execute(
           'SELECT id FROM envios WHERE negocio_id=? AND campana_id=? AND estado="pendiente" LIMIT 1',
           [nid, campana.id]
         );
         if (envio) {
-          await db.execute('UPDATE envios SET estado="fallido",error_msg=? WHERE id=?', [e.message, envio.id]);
-          if (io) io.emit('envio:progreso', { id: envio.id, estado: 'fallido', error: e.message });
+          await db.execute('UPDATE envios SET estado=?,error_msg=? WHERE id=?', [nuevoEstado, e.message, envio.id]);
+          if (io) io.emit('envio:progreso', { id: envio.id, estado: nuevoEstado, error: e.message });
         }
       } catch(_) {}
       await sleep(2000);
