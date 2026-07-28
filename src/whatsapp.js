@@ -37,7 +37,7 @@ async function buscarNegocio(jid, numero) {
     // 1. Buscar por wa_jid (LID ya conocido)
     if (jidLimpio) {
       const [r1] = await db.execute(
-        'SELECT id, nombre FROM negocios WHERE wa_jid=? LIMIT 1',
+        'SELECT id, nombre, wa_jid FROM negocios WHERE wa_jid=? LIMIT 1',
         [jidLimpio]
       );
       if (r1[0]) { console.log('  → Por wa_jid:', r1[0].nombre); return r1[0]; }
@@ -48,7 +48,7 @@ async function buscarNegocio(jid, numero) {
       const numCorto = numero.startsWith('51') ? numero.slice(2) : numero;
       const numLargo = numero.startsWith('51') ? numero : '51' + numero;
       const [r2] = await db.execute(`
-        SELECT id, nombre FROM negocios
+        SELECT id, nombre, wa_jid FROM negocios
         WHERE REPLACE(REPLACE(COALESCE(whatsapp,''),'+',''),' ','')     IN (?,?,?)
            OR REPLACE(REPLACE(COALESCE(telefono_int,''),'+',''),' ','') IN (?,?,?)
            OR REPLACE(REPLACE(COALESCE(telefono,''),'+',''),' ','')     IN (?,?,?)
@@ -56,11 +56,7 @@ async function buscarNegocio(jid, numero) {
       `, [numLargo,numCorto,numero, numLargo,numCorto,numero, numLargo,numCorto,numero]);
       if (r2[0]) {
         console.log('  → Por número:', r2[0].nombre);
-        // Guardar el JID para próximas búsquedas
-        if (jidLimpio) {
-          await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [jidLimpio, r2[0].id]);
-        }
-        return r2[0];
+        return r2[0]; // wa_jid se guarda en el bloque principal
       }
     }
 
@@ -160,23 +156,21 @@ async function connect() {
         if (isJidBroadcast(jid))  continue;
         if (!msg.message)         continue;
 
-        const esMio = !!msg.key.fromMe;
+        const esMio     = !!msg.key.fromMe;
         const jidLimpio = extraerJID(jid);
 
-        // Número real si viene en formato normal
+        // Número real solo si viene en formato estándar
         let numero = null;
         if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@c.us')) {
           numero = jidLimpio;
         }
-        // Si es @lid intentar sacar número de pushName o contextInfo
-        // pero igual guardamos con jidLimpio como identificador
 
         const texto = extraerTexto(msg);
         if (!texto) continue;
 
-        console.log((esMio ? '📤 Enviado a' : '📩 Recibido de'), jidLimpio, ':', texto.substring(0,50));
+        console.log((esMio ? '📤 Enviado a' : '📩 Recibido de'), jidLimpio, ':', texto.substring(0, 50));
 
-        // Deduplicar
+        // Deduplicar por wa_id
         if (msg.key.id) {
           const [[existe]] = await db.execute(
             'SELECT id FROM chat_mensajes WHERE wa_id=? LIMIT 1', [msg.key.id]
@@ -184,22 +178,38 @@ async function connect() {
           if (existe) { console.log('  ↩ Duplicado'); continue; }
         }
 
-        // Buscar negocio por JID o número
+        // Buscar negocio — primero por wa_jid, luego por número
         const negocio   = await buscarNegocio(jid, numero);
         const negocioId = negocio?.id || null;
         const direccion = esMio ? 'saliente' : 'entrante';
 
-        // Guardar con jidLimpio como numero (identificador único del contacto)
-        const numeroGuardar = numero || jidLimpio;
+        // El identificador que guardamos: número real si lo hay, si no el JID limpio
+        const identificador = numero || jidLimpio;
+
+        // Guardar wa_jid en el negocio si aún no lo tiene
+        // Para mensajes SALIENTES: jidLimpio es el número del DESTINATARIO
+        // Para mensajes ENTRANTES: jidLimpio es el número del REMITENTE
+        // En ambos casos es el JID del contacto → guardarlo en el negocio
+        if (negocio && !negocio.wa_jid && jidLimpio) {
+          await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [jidLimpio, negocio.id]);
+          console.log('  ✓ wa_jid guardado en negocio', negocio.nombre, '→', jidLimpio);
+        }
+
         await db.execute(
           'INSERT INTO chat_mensajes (negocio_id, numero, direccion, contenido, wa_id) VALUES (?,?,?,?,?)',
-          [negocioId, numeroGuardar, direccion, texto, msg.key.id || null]
+          [negocioId, identificador, direccion, texto, msg.key.id || null]
         );
-        console.log('  ✓ Guardado — negocio:', negocio?.nombre || 'sin asociar');
+        console.log('  ✓ Guardado — negocio:', negocio?.nombre || 'sin asociar ('+identificador+')');
 
         // Emitir en tiempo real
-        const evData = { jid: jidLimpio, numero: numeroGuardar, texto, negocioId, negocioNombre: negocio?.nombre || jidLimpio, ts: new Date() };
-        emit(esMio ? 'wa:mensaje_saliente' : 'wa:mensaje_entrante', evData);
+        emit(esMio ? 'wa:mensaje_saliente' : 'wa:mensaje_entrante', {
+          jid: jidLimpio,
+          numero: identificador,
+          texto,
+          negocioId,
+          negocioNombre: negocio?.nombre || identificador,
+          ts: new Date()
+        });
 
       } catch(e) {
         console.error('  ✗ Error:', e.message);
