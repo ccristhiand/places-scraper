@@ -103,24 +103,26 @@
 const socket=io();
 let contactosSel=new Set(), totalEnvios=0, enviados=0, fallidos=0;
 
-socket.on('envio:progreso',({estado,nombre,error})=>{
-  const cls=estado==='enviado'?'log-ok':estado==='fallido'?'log-err':'log-info';
+function onProgreso(d) {
+  var estado=d.estado, nombre=d.nombre, error=d.error;
+  var cls=estado==='enviado'?'log-ok':estado==='fallido'?'log-err':'log-info';
   logMsg((estado==='enviado'?'✓ ':'✗ ')+nombre+(error?' ('+error+')':''), cls);
   if(estado==='enviado') enviados++; else if(estado==='fallido') fallidos++;
-  const prog=enviados+fallidos;
+  var prog=enviados+fallidos;
   document.getElementById('barF').style.width=(totalEnvios>0?(prog/totalEnvios*100):0)+'%';
   document.getElementById('pCount').textContent=prog+' / '+totalEnvios;
   document.getElementById('sEnv').textContent=enviados;
   document.getElementById('sFall').textContent=fallidos;
   document.getElementById('sPend').textContent=Math.max(0,totalEnvios-prog);
-});
-socket.on('envio:completado',()=>{
+}
+function onCompletado(d) {
   logMsg('✅ Envío completado — '+enviados+' enviados, '+fallidos+' fallidos','log-ok');
   document.getElementById('pMsg').textContent='✅ Completado';
   document.getElementById('btnEnviar').disabled=false;
-  const br=document.getElementById('btnReintentar'); if(br){br.disabled=false;br.textContent='🔄 Reintentar pendientes';}
+  _enviandoActivo=false;
+  var br=document.getElementById('btnReintentar'); if(br){br.disabled=false;br.textContent='🔄 Reintentar pendientes';}
   loadHistorial(); loadStats(); checkPendientes();
-});
+}
 
 async function loadCampanas(){
   const data=await fetch('/api/campanas').then(r=>r.json()).catch(()=>({rows:[]}));
@@ -137,18 +139,34 @@ async function loadDeps(){
   deps.forEach(d=>document.getElementById('fDep').innerHTML+=`<option value="${d}">${d}</option>`);
 }
 async function loadContactos(){
-  const estado=document.getElementById('fEstado').value, dep=document.getElementById('fDep').value;
-  const data=await fetch(`/api/negocios?limit=500${estado?'&estado_crm='+estado:''}${dep?'&dep='+encodeURIComponent(dep):''}`).then(r=>r.json()).catch(()=>({rows:[]}));
-  const rows=data.rows||[];
-  const conNum=rows.filter(r=>r.whatsapp||r.telefono_int||r.telefono);
+  var estado=document.getElementById('fEstado').value;
+  var dep=document.getElementById('fDep').value;
+  var url='/api/negocios?limit=500';
+  if(estado) url+='&estado_crm='+encodeURIComponent(estado);
+  if(dep)    url+='&dep='+encodeURIComponent(dep);
+
+  var data=await fetch(url).then(function(r){return r.json();}).catch(function(){return {rows:[]};});
+  var rows=data.rows||[];
+  var conNum=rows.filter(function(r){return r.whatsapp||r.telefono_int||r.telefono;});
+
   document.getElementById('warn').style.display=rows.length>conNum.length?'block':'none';
-  document.getElementById('listaContactos').style.display='';
-  document.getElementById('contactItems').innerHTML=conNum.map(r=>`
-    <div class="check-item">
-      <input type="checkbox" class="cc" data-id="${r.id}" onchange="togC(this)">
-      <span class="name">${r.nombre}</span>
-      <span class="tel">${r.whatsapp||r.telefono_int||r.telefono||''}</span>
-    </div>`).join('');
+  document.getElementById('listaContactos').style.display='block';
+
+  if(!conNum.length){
+    document.getElementById('contactItems').innerHTML='<div style="text-align:center;padding:1rem;color:#94a3b8;font-size:12px">Sin contactos con número registrado para estos filtros</div>';
+    document.getElementById('btnEnviar').disabled=true;
+    return;
+  }
+
+  document.getElementById('contactItems').innerHTML=conNum.map(function(r){
+    return '<div class="check-item">' +
+      '<input type="checkbox" class="cc" data-id="'+r.id+'" onchange="togC(this)">' +
+      '<span class="name">'+r.nombre+'</span>' +
+      '<span class="tel">'+(r.whatsapp||r.telefono_int||r.telefono||'')+'</span>' +
+    '</div>';
+  }).join('');
+
+  contactosSel.clear();
   updResumen();
   document.getElementById('btnEnviar').disabled=false;
 }
@@ -181,6 +199,7 @@ async function iniciarEnvio(){
   document.getElementById('sPend').textContent=totalEnvios;
   logMsg('✓ Envío iniciado — '+d.total+' mensajes en cola','log-ok');
   document.getElementById('pMsg').textContent='Enviando '+d.total+' mensajes...';
+  _enviandoActivo=true;
 }
 
 async function reintentarPendientes(){
@@ -242,4 +261,10 @@ function logMsg(msg,cls){
   log.scrollTop=log.scrollHeight;
 }
 loadCampanas(); loadDeps(); loadHistorial(); loadStats(); checkPendientes();
+// Cargar socket.io dinámicamente
+var s=document.createElement("script");
+s.src="/socket.io/socket.io.js";
+s.onload=function(){ initSocket(); };
+s.onerror=function(){ console.warn("Socket.io no disponible - usando polling"); initSocket(); };
+document.head.appendChild(s);
 </script></body></html>
