@@ -159,10 +159,14 @@ async function connect() {
         const esMio     = !!msg.key.fromMe;
         const jidLimpio = extraerJID(jid);
 
-        // Número real solo si viene en formato estándar
+        // Número real — puede venir en el JID estándar o en senderPn (mensajes @lid)
         let numero = null;
         if (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@c.us')) {
           numero = jidLimpio;
+        } else if (msg.key.senderPn) {
+          // senderPn contiene el número real aunque el JID sea @lid
+          numero = msg.key.senderPn.replace('@s.whatsapp.net','').replace(/[^0-9]/g,'');
+          console.log('  ✓ Número real obtenido de senderPn:', numero);
         }
 
         const texto = extraerTexto(msg);
