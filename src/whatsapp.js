@@ -212,16 +212,21 @@ async function connect() {
         const direccion     = esMio ? 'saliente' : 'entrante';
         const identificador = numero || jidLimpio;
 
-        // Guardar wa_jid siempre que sea un LID válido
-        // Esto permite que el saliente posterior lo encuentre por wa_jid
-        if (negocio && jidLimpio && jid.endsWith('@lid')) {
-          if (negocio.wa_jid !== jidLimpio) {
+        // Guardar wa_jid:
+        // - Si llega @lid: SIEMPRE guardar el LID (es el ID real de WA para ese contacto)
+        // - Si llega número normal: guardar solo si no hay wa_jid aún
+        if (negocio && jidLimpio) {
+          if (jid.endsWith('@lid')) {
+            // Siempre actualizar con el LID — es el identificador definitivo
             await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [jidLimpio, negocio.id]);
-            console.log('  ✓ wa_jid actualizado:', negocio.nombre, '->', jidLimpio);
+            negocio.wa_jid = jidLimpio;
+            console.log('  ✓ wa_jid (LID) guardado:', negocio.nombre, '->', jidLimpio);
+          } else if (!negocio.wa_jid) {
+            // Solo guardar número si no hay LID aún
+            await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [jidLimpio, negocio.id]);
+            negocio.wa_jid = jidLimpio;
+            console.log('  ✓ wa_jid (número) guardado:', negocio.nombre, '->', jidLimpio);
           }
-        } else if (negocio && !negocio.wa_jid && jidLimpio) {
-          await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [jidLimpio, negocio.id]);
-          console.log('  ✓ wa_jid guardado:', negocio.nombre, '->', jidLimpio);
         }
 
         await db.execute(
