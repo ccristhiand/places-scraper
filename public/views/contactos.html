@@ -349,16 +349,19 @@ async function load() {
       '<td><input type="checkbox" class="rowchk" data-id="'+r.id+'" '+(selIds.has(r.id)?'checked':'')+' onchange="togSel(this)"></td>' +
       '<td style="color:var(--faint);font-size:11px;font-family:monospace">#'+r.id+'</td>' +
       '<td><b style="font-size:12px">'+esc(r.nombre)+'</b>' +
-        (r.wa_verificado===1?'<span style="font-size:10px;color:#15803d;margin-left:4px">✅WA</span>':r.wa_verificado===0?'<span style="font-size:10px;color:#dc2626;margin-left:4px">❌WA</span>':'') +
         (sinNumero ? '<br><span class="badge b-warn" style="margin-top:2px">⚠️ Sin número</span>' : '') +
       '</td>' +
-      '<td>' +
-        (r.whatsapp ? '<span style="font-size:11px;color:#22c55e">📱 '+esc(r.whatsapp)+'</span><br>' : '') +
-        (r.telefono ? '<span style="font-family:monospace;font-size:11px;color:var(--accent)">'+esc(r.telefono)+'</span>' : '<span style="color:#cbd5e1;font-size:11px">—</span>') +
+      '<td style="font-family:monospace;font-size:11px;color:var(--accent)">' +
+        (r.telefono ? esc(r.telefono) : '<span style="color:#cbd5e1">—</span>') +
       '</td>' +
-      '<td style="font-size:11px;color:var(--muted)">'+esc([r.distrito,r.provincia].filter(Boolean).join(', '))||'—'+'</td>' +
+      '<td style="text-align:center">' +
+        (r.wa_verificado===1 ? '<span title="Verificado con WA" style="color:#16a34a">✅</span>' :
+         r.wa_verificado===0 ? '<span title="Sin WhatsApp" style="color:#dc2626">❌</span>' :
+         r.whatsapp ? '<span title="Tiene número WA" style="color:#22c55e;font-size:13px">📱</span>' :
+         '<span style="color:#cbd5e1;font-size:11px">—</span>') +
+      '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">'+esc([r.distrito,r.provincia].filter(Boolean).join(', ')||'—')+'</td>' +
       '<td style="font-size:11px;color:var(--muted)">'+esc(r.rubro_busqueda||'—')+'</td>' +
-      '<td>' + (r.rating ? '<span style="color:#f59e0b">★</span> '+r.rating : '—') + '</td>' +
       '<td><span class="badge '+(CRM_C[r.estado_crm]||'b-gray')+'">'+(CRM_L[r.estado_crm]||r.estado_crm)+'</span></td>' +
       '<td style="white-space:nowrap">' +
         '<button class="btn btn-outline btn-xs" onclick="selRow('+r.id+')">Ver</button> ' +
