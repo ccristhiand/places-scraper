@@ -86,6 +86,20 @@ input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:14px;height
   .filter-bar{gap:5px}
 }
 </style></head><body>
+<!-- Banner verificación masiva -->
+<div id="verBanner" style="display:none;background:#fff;border-bottom:2px solid #3b82f6;padding:.75rem 1rem">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:100%">
+    <span style="font-weight:700;color:#1d4ed8;font-size:13px">📱 Verificando WhatsApp...</span>
+    <span style="font-size:12px;color:#64748b"><b id="verCount">0</b> / <b id="verTotal">0</b></span>
+    <div style="flex:1;min-width:150px;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">
+      <div id="verBar" style="height:100%;background:linear-gradient(90deg,#22c55e,#16a34a);border-radius:4px;width:0%;transition:width .3s"></div>
+    </div>
+    <span id="verPct" style="font-weight:700;color:#16a34a;font-size:13px">0%</span>
+    <span style="font-size:11px;color:#64748b">✅ <b id="verConWA">0</b> con WA &nbsp; ❌ <b id="verSinWA">0</b> sin WA</span>
+    <button onclick="cancelarVerificacion()" style="height:26px;padding:0 10px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:11px;cursor:pointer">✕ Cancelar</button>
+  </div>
+</div>
+
 <div class="layout">
 <div class="left">
 
@@ -115,7 +129,8 @@ input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:14px;height
     <div class="sel-actions">
       <span class="sel-count" id="selCount" style="display:none"></span>
       <button id="btnElimSel" onclick="eliminarSeleccionados()" style="display:none;height:26px;padding:0 10px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:6px;font-size:11px;cursor:pointer">🗑️ Eliminar seleccionados</button>
-      <button onclick="verificarSeleccionados()" style="height:26px;padding:0 10px;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;cursor:pointer;background:#f0fdf4;color:#15803d">✅ Verificar WA</button>
+      <button onclick="verificarTodosNulos()" style="height:26px;padding:0 10px;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;cursor:pointer;background:#f0fdf4;color:#15803d">📱 Verificar todos</button>
+      <button onclick="verificarSeleccionados()" style="height:26px;padding:0 10px;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;cursor:pointer;background:#f0fdf4;color:#15803d">✅ Verificar seleccionados</button>
       <button onclick="selAll()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">☑ Seleccionar página</button>
       <button onclick="deselAll()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:#fff">✕ Deseleccionar</button>
     </div>
@@ -593,44 +608,107 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 // ── Verificar WA ─────────────────────────────────────────────────────────────
 var verificandoWA = false;
 
+function mostrarBanner(total) {
+  document.getElementById('verBanner').style.display = 'block';
+  document.getElementById('verTotal').textContent = total;
+  document.getElementById('verCount').textContent = '0';
+  document.getElementById('verBar').style.width = '0%';
+  document.getElementById('verPct').textContent = '0%';
+  document.getElementById('verConWA').textContent = '0';
+  document.getElementById('verSinWA').textContent = '0';
+}
+
+function actualizarBanner(d) {
+  document.getElementById('verCount').textContent = d.verificados;
+  document.getElementById('verTotal').textContent = d.total;
+  document.getElementById('verBar').style.width = d.porcentaje + '%';
+  document.getElementById('verPct').textContent = d.porcentaje + '%';
+  document.getElementById('verConWA').textContent = d.con_wa;
+  document.getElementById('verSinWA').textContent = d.sin_wa;
+}
+
 async function verificarSeleccionados() {
   if (!selIds.size) return alert('Selecciona contactos primero');
   if (verificandoWA) return alert('Ya hay una verificación en curso');
-  if (!confirm('¿Verificar WhatsApp de '+selIds.size+' contactos seleccionados?\n\nEsto puede tomar unos minutos.')) return;
-
-  verificandoWA = true;
-  var banner = document.getElementById('verificarBanner');
-  if (banner) banner.style.display = 'block';
+  if (!confirm('¿Verificar WhatsApp de '+selIds.size+' contactos seleccionados?')) return;
 
   var r = await fetch('/api/verificar/lote', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ negocio_ids: Array.from(selIds), solo_sin_verificar: false })
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ negocio_ids: Array.from(selIds) })
   });
   var d = await r.json();
-  if (!d.ok) { alert('Error: '+d.error); verificandoWA = false; return; }
-  alert('✅ Verificación iniciada para '+d.total+' contactos. Los resultados aparecerán automáticamente.');
+  if (!d.ok) return alert(d.msg || d.error);
+  if (d.total === 0) return alert('Sin contactos para verificar');
+  verificandoWA = true;
+  mostrarBanner(d.total);
 }
 
-async function verificarSinVerificar() {
+async function verificarTodosNulos() {
   if (verificandoWA) return alert('Ya hay una verificación en curso');
   var stats = await fetch('/api/verificar/stats').then(function(r){return r.json();}).catch(function(){return {};});
-  var sinVer = stats.stats?.sin_verificar || 0;
-  if (!sinVer) return alert('Todos los contactos ya fueron verificados');
-  if (!confirm('¿Verificar '+sinVer+' contactos sin verificar? (máx. 50 por lote)')) return;
+  var sinVer = stats.stats ? (stats.stats.sin_verificar||0) : 0;
+  if (!sinVer) return alert('✅ Todos los contactos ya fueron verificados');
+  if (!confirm('¿Verificar '+sinVer+' contactos sin verificar?\n\nEsto puede tomar aproximadamente '+ Math.round(sinVer*1.5/60)+' minutos.')) return;
 
-  verificandoWA = true;
-  var r = await fetch('/api/verificar/lote', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ solo_sin_verificar: true })
-  });
+  var r = await fetch('/api/verificar/masivo', { method: 'POST' });
   var d = await r.json();
-  if (!d.ok) { alert('Error: '+d.error); verificandoWA = false; return; }
-  alert('✅ '+d.msg);
+  if (!d.ok) return alert(d.msg || d.error);
+  if (d.total === 0) return alert(d.msg || 'Sin contactos para verificar');
+  verificandoWA = true;
+  mostrarBanner(d.total);
+}
+
+async function cancelarVerificacion() {
+  await fetch('/api/verificar/cancelar', { method: 'POST' });
+  verificandoWA = false;
+  document.getElementById('verBanner').style.display = 'none';
+}
+
+// Iniciar socket para verificación
+function initVerificarSocket() {
+  if (typeof io === 'undefined') return;
+  try {
+    var sock = io({ transports: ['websocket','polling'] });
+    sock.on('verificar:inicio', function(d) {
+      verificandoWA = true;
+      mostrarBanner(d.total);
+    });
+    sock.on('verificar:progreso', function(d) {
+      actualizarBanner(d);
+      // Actualizar ícono WA en la tabla en tiempo real
+      var rows = document.querySelectorAll('#tbody tr');
+      rows.forEach(function(tr) {
+        if (tr.innerHTML.indexOf('#'+d.negocio_id) > -1) {
+          var waCell = tr.querySelectorAll('td')[4]; // columna WA
+          if (waCell) {
+            waCell.innerHTML = d.tiene_wa === true
+              ? '<span style="color:#16a34a">✅</span>'
+              : d.tiene_wa === false
+              ? '<span style="color:#dc2626">❌</span>'
+              : '<span style="color:#94a3b8">?</span>';
+          }
+        }
+      });
+    });
+    sock.on('verificar:completado', function(d) {
+      verificandoWA = false;
+      document.getElementById('verPct').textContent = '100%';
+      document.getElementById('verBar').style.width = '100%';
+      setTimeout(function() {
+        document.getElementById('verBanner').style.display = 'none';
+        load(); // recargar tabla con los nuevos datos
+      }, 3000);
+      alert('✅ Verificación completa\n\n✅ Con WhatsApp: '+d.con_wa+'\n❌ Sin WhatsApp: '+d.sin_wa);
+    });
+    sock.on('verificar:cancelado', function() {
+      verificandoWA = false;
+      document.getElementById('verBanner').style.display = 'none';
+    });
+  } catch(e) { console.warn('Socket no disponible'); }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+initVerificarSocket();
 async function initFiltros() {
   // Departamentos
   var deps = await fetch('/api/ubigeo/departamentos').then(function(r){return r.json();}).catch(function(){return [];});
