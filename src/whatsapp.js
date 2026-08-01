@@ -103,10 +103,11 @@ async function connect() {
     auth:                state,
     logger:              pino({ level: 'silent' }),
     printQRInTerminal:   false,
-    browser:             ['Places CRM', 'Chrome', '1.0'],
+    browser:             ['VetClinic', 'Chrome', '1.0'],
     connectTimeoutMs:    60000,
     keepAliveIntervalMs: 25000,
     retryRequestDelayMs: 2000,
+    syncFullHistory:     false,
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -267,6 +268,13 @@ async function enviarMensaje({ numero, texto, imagenPath, negocioId }) {
   } else {
     result = await sock.sendMessage(jid, { text: texto });
   }
+
+  console.log('  📬 Resultado sendMessage:', JSON.stringify({
+    id:     result?.key?.id,
+    status: result?.status,
+    fromMe: result?.key?.fromMe,
+    jid:    result?.key?.remoteJid
+  }));
 
   // Cachear wa_id → negocioId para cuando llegue el evento saliente
   if (result?.key?.id && negocioId) {
