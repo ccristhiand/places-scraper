@@ -231,7 +231,10 @@ async function enviarEnBackground(campana, negocio_ids, estado_destino) {
 
     // ── Control: horario ──────────────────────────────────────────────────
     const horaActual = new Date().getHours();
-    if (horaActual < cfg.horaInicio || horaActual >= cfg.horaFin) {
+    // Si inicio=0 y fin=23 significa 24 horas — no restringir
+    const es24horas = cfg.horaInicio === 0 && cfg.horaFin === 23;
+    const fueraHorario = !es24horas && (horaActual < cfg.horaInicio || horaActual > cfg.horaFin);
+    if (fueraHorario) {
       const msg = `⏰ Fuera de horario permitido (${cfg.horaInicio}:00 - ${cfg.horaFin}:00). Envío pausado.`;
       if (io) io.emit('envio:control', { tipo: 'horario', msg });
       console.log(msg);
