@@ -271,7 +271,7 @@ async function loadContactos() {
   var dep    = document.getElementById('fDep').value;
 
   var wa_filter = document.getElementById('fWA').value;
-  var url = '/api/negocios?limit=500';
+  var url = '/api/negocios?limit=10000';  // sin límite práctico
   if (estado)    url += '&estado_crm='    + encodeURIComponent(estado);
   if (dep)       url += '&dep='           + encodeURIComponent(dep);
   if (wa_filter === '1') url += '&wa_verificado=1';

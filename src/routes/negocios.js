@@ -118,7 +118,7 @@ router.get('/', async (req, res) => {
     const sortCol = colsPermitidas.includes(sort) ? sort : 'created_at';
     const sortDir = dir === 'ASC' ? 'ASC' : 'DESC';
 
-    const lim = Math.min(parseInt(limit) || 20, 1000);
+    const lim = Math.min(parseInt(limit) || 20, 10000);
     const off = parseInt(offset) || 0;
     const [rows] = await db.execute(
       `SELECT * FROM negocios WHERE ${where.join(' AND ')} ORDER BY ${sortCol} ${sortDir} LIMIT ${lim} OFFSET ${off}`, vals);
