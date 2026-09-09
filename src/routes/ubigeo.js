@@ -18,4 +18,16 @@ router.get('/distritos/:dep/:prov', (req, res) => {
   res.json([...dist].sort());
 });
 
+// GET /api/ubigeo?dep=X&prov=Y — endpoint unificado para los filtros del frontend
+router.get('/', (req, res) => {
+  const { dep, prov } = req.query;
+  if (!dep) return res.json({ departamentos: Object.keys(UBIGEO).sort() });
+  const depData = UBIGEO[dep];
+  if (!depData) return res.json({ provincias: [] });
+  if (!prov) return res.json({ provincias: Object.keys(depData).sort() });
+  const provData = depData[prov];
+  if (!provData) return res.json({ distritos: [] });
+  res.json({ distritos: [...provData].sort() });
+});
+
 module.exports = router;

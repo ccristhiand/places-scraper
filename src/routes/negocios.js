@@ -98,7 +98,7 @@ router.post('/guardar', async (req, res) => {
 // GET /api/negocios
 router.get('/', async (req, res) => {
   try {
-    const { dep, prov, dist, rubro, estado_crm, q, sin_numero, wa_verificado, limit = 20, offset = 0 } = req.query;
+    const { dep, prov, dist, rubro, estado_crm, q, sin_numero, wa_verificado, sort, dir, limit = 20, offset = 0 } = req.query;
     const where = ['1=1'], vals = [];
     if (dep)        { where.push('departamento=?');        vals.push(dep); }
     if (prov)       { where.push('provincia=?');           vals.push(prov); }
@@ -112,10 +112,16 @@ router.get('/', async (req, res) => {
     if (wa_verificado === '1')    { where.push('wa_verificado = 1'); }
     if (wa_verificado === '0')    { where.push('wa_verificado = 0'); }
     if (wa_verificado === 'null') { where.push('wa_verificado IS NULL'); }
-    const lim = Math.min(parseInt(limit) || 20, 500);
+
+    // Ordenamiento seguro
+    const colsPermitidas = ['nombre','rating','created_at','rubro_busqueda','estado_crm','distrito'];
+    const sortCol = colsPermitidas.includes(sort) ? sort : 'created_at';
+    const sortDir = dir === 'ASC' ? 'ASC' : 'DESC';
+
+    const lim = Math.min(parseInt(limit) || 20, 1000);
     const off = parseInt(offset) || 0;
     const [rows] = await db.execute(
-      `SELECT * FROM negocios WHERE ${where.join(' AND ')} ORDER BY created_at DESC LIMIT ${lim} OFFSET ${off}`, vals);
+      `SELECT * FROM negocios WHERE ${where.join(' AND ')} ORDER BY ${sortCol} ${sortDir} LIMIT ${lim} OFFSET ${off}`, vals);
     const [[{ total }]] = await db.execute(
       `SELECT COUNT(*) as total FROM negocios WHERE ${where.join(' AND ')}`, vals);
     res.json({ ok: true, total, rows, limit: lim, offset: off });

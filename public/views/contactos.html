@@ -106,7 +106,9 @@ input[type=checkbox]{accent-color:var(--accent);cursor:pointer;width:14px;height
   <!-- Barra de filtros -->
   <div class="filter-bar">
     <input class="fi fi-search" id="fQ" placeholder="🔍 Buscar nombre, teléfono, dirección..." oninput="debounce()">
-    <select class="fi" id="fDep" onchange="resetPage();load()"><option value="">Todos dep.</option></select>
+    <select class="fi" id="fDep" onchange="resetPage();loadProv();load()"><option value="">Todos dep.</option></select>
+    <select class="fi" id="fProv" onchange="resetPage();loadDist();load()" style="display:none"><option value="">Todas provincias</option></select>
+    <select class="fi" id="fDist" onchange="resetPage();load()" style="display:none"><option value="">Todos distritos</option></select>
     <select class="fi" id="fRubro" onchange="resetPage();load()"><option value="">Todos rubros</option></select>
     <select class="fi" id="fEstado" onchange="resetPage();load()">
       <option value="">Todos estados CRM</option>
@@ -295,6 +297,35 @@ function debounce() {
   debTimer = setTimeout(function() { resetPage(); load(); }, 350);
 }
 
+async function loadProv() {
+  var dep   = document.getElementById('fDep').value;
+  var fProv = document.getElementById('fProv');
+  var fDist = document.getElementById('fDist');
+  fProv.innerHTML = '<option value="">Todas provincias</option>';
+  fDist.innerHTML = '<option value="">Todos distritos</option>';
+  fDist.style.display = 'none';
+  if (!dep) { fProv.style.display = 'none'; return; }
+
+  // Cargar provincias desde el ubigeo
+  var data = await fetch('/api/ubigeo?dep=' + encodeURIComponent(dep)).then(function(r){return r.json();}).catch(function(){return {};});
+  var provs = data.provincias || [];
+  provs.forEach(function(p) { fProv.innerHTML += '<option value="'+p+'">'+p+'</option>'; });
+  fProv.style.display = '';
+}
+
+async function loadDist() {
+  var dep   = document.getElementById('fDep').value;
+  var prov  = document.getElementById('fProv').value;
+  var fDist = document.getElementById('fDist');
+  fDist.innerHTML = '<option value="">Todos distritos</option>';
+  if (!prov) { fDist.style.display = 'none'; return; }
+
+  var data = await fetch('/api/ubigeo?dep=' + encodeURIComponent(dep) + '&prov=' + encodeURIComponent(prov)).then(function(r){return r.json();}).catch(function(){return {};});
+  var dists = data.distritos || [];
+  dists.forEach(function(d) { fDist.innerHTML += '<option value="'+d+'">'+d+'</option>'; });
+  fDist.style.display = '';
+}
+
 function resetPage() { pagina = 0; }
 
 function toggleSinNum() {
@@ -326,12 +357,19 @@ async function load() {
   var estado   = document.getElementById('fEstado').value;
   var perPage  = parseInt(document.getElementById('perPage').value) || 20;
 
+  var prov  = document.getElementById('fProv')?.value || '';
+  var dist  = document.getElementById('fDist')?.value || '';
+
   var url = '/api/negocios?limit=' + perPage + '&offset=' + (pagina * perPage);
+  url += '&sort=' + sortCol + '&dir=' + sortDir;
   if (q)      url += '&q='          + encodeURIComponent(q);
   if (dep)    url += '&dep='        + encodeURIComponent(dep);
+  if (prov)   url += '&prov='       + encodeURIComponent(prov);
+  if (dist)   url += '&dist='       + encodeURIComponent(dist);
   if (rubro)  url += '&rubro='      + encodeURIComponent(rubro);
   if (estado) url += '&estado_crm=' + encodeURIComponent(estado);
   if (sinNum) url += '&sin_numero=1';
+  if (conWA)  url += '&wa_verificado=1';
 
   var data = await fetch(url).then(function(r){return r.json();}).catch(function(){return {rows:[],total:0};});
   var rows  = data.rows || [];
