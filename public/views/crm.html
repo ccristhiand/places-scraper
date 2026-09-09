@@ -87,7 +87,7 @@ async function load() {
   const dep=document.getElementById('fDep').value;
   const rubro=document.getElementById('fRubro').value;
   const q=document.getElementById('fQ').value;
-  const url=`/api/negocios?limit=500${dep?'&dep='+encodeURIComponent(dep):''}${rubro?'&rubro='+encodeURIComponent(rubro):''}${q?'&q='+encodeURIComponent(q):''}`;
+  const url=`/api/negocios?limit=10000${dep?'&dep='+encodeURIComponent(dep):''}${rubro?'&rubro='+encodeURIComponent(rubro):''}${q?'&q='+encodeURIComponent(q):''}`;
   const data=await fetch(url).then(r=>r.json()).catch(()=>({rows:[]}));
   todos=data.rows||[];
   render();
@@ -260,7 +260,7 @@ async function agendar(id, nombre) {
 async function initFiltros() {
   const deps=await fetch('/api/ubigeo/departamentos').then(r=>r.json()).catch(()=>[]);
   deps.forEach(d=>document.getElementById('fDep').innerHTML+=`<option value="${d}">${d}</option>`);
-  const data=await fetch('/api/negocios?limit=500').then(r=>r.json()).catch(()=>({rows:[]}));
+  const data=await fetch('/api/negocios?limit=10000').then(r=>r.json()).catch(()=>({rows:[]}));
   const rubros=[...new Set((data.rows||[]).map(r=>r.rubro_busqueda).filter(Boolean))];
   rubros.forEach(r=>document.getElementById('fRubro').innerHTML+=`<option value="${r}">${r}</option>`);
 }
