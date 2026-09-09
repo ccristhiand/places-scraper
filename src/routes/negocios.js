@@ -112,6 +112,10 @@ router.get('/', async (req, res) => {
     if (wa_verificado === '1')    { where.push('wa_verificado = 1'); }
     if (wa_verificado === '0')    { where.push('wa_verificado = 0'); }
     if (wa_verificado === 'null') { where.push('wa_verificado IS NULL'); }
+    // Aptos = verificados con WA O que tienen número whatsapp/telefono registrado
+    if (req.query.wa_aptos === '1') {
+      where.push('(wa_verificado = 1 OR (wa_verificado IS NULL AND (whatsapp IS NOT NULL AND whatsapp != "") OR (telefono IS NOT NULL AND telefono != "") OR (telefono_int IS NOT NULL AND telefono_int != "")))');
+    }
 
     // Ordenamiento seguro
     const colsPermitidas = ['nombre','rating','created_at','rubro_busqueda','estado_crm','distrito'];

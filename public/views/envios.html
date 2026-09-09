@@ -67,7 +67,8 @@
         <label>Filtro WhatsApp</label>
         <select id="fWA" style="height:36px;border:1px solid var(--border);border-radius:8px;font-size:13px;padding:0 10px">
           <option value="">Todos los contactos</option>
-          <option value="1" selected>✅ Solo verificados con WA</option>
+          <option value="aptos" selected>📱 Aptos para WA (verificados + con número)</option>
+          <option value="1">✅ Solo verificados con WA</option>
           <option value="0">❌ Solo sin WhatsApp</option>
           <option value="null">⬜ Sin verificar</option>
         </select>
@@ -274,7 +275,8 @@ async function loadContactos() {
   var url = '/api/negocios?limit=10000';  // sin límite práctico
   if (estado)    url += '&estado_crm='    + encodeURIComponent(estado);
   if (dep)       url += '&dep='           + encodeURIComponent(dep);
-  if (wa_filter === '1') url += '&wa_verificado=1';
+  if (wa_filter === 'aptos') url += '&wa_aptos=1';
+  else if (wa_filter === '1') url += '&wa_verificado=1';
   else if (wa_filter === '0') url += '&wa_verificado=0';
   else if (wa_filter === 'null') url += '&wa_verificado=null';
 
