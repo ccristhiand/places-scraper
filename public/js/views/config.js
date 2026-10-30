@@ -25,7 +25,7 @@ export async function render(el, params) {
       try {
         const r = await api.post('/api/whatsapp/probar-app');
         dibujar($('[data-meta-res]', el), html`<div class="alert success">${icon('check')}<div><b>Conexión correcta con la app "${r.app}".</b>
-          ${r.config_id_ok ? 'Ya puedes conectar el número en WhatsApp → Conexión.' : 'Falta el Configuration ID de Embedded Signup.'}</div></div>`);
+          ${r.config_id_ok ? 'Ya puedes conectar el número en WhatsApp → Conexión.' : 'Falta el Configuration ID correcto de Embedded Signup (no es el App ID).'}</div></div>`);
       } catch (e) { dibujar($('[data-meta-res]', el), html`<div class="alert danger">${icon('alert')}<div>${e.message}</div></div>`); }
     }),
     'probar-google': b => conCarga(b, async () => {

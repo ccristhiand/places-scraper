@@ -46,7 +46,8 @@ function conexion(cont) {
   const calidad = { GREEN: ['success', 'Alta'], YELLOW: ['warning', 'Media'], RED: ['danger', 'Baja'] }[c.calidad] || ['', c.calidad || '—'];
 
   dibujar(cont, html`
-    ${!p.lista ? html`<div class="alert warning mb">${icon('alert')}<div><b>Falta configurar la app de Meta.</b> Para el botón de conexión se necesitan el App ID, la clave secreta y el Configuration ID de Embedded Signup.
+    ${p.config_invalido ? html`<div class="alert danger mb">${icon('alert')}<div><b>El Configuration ID guardado es el App ID.</b> Copia el ID de la configuración de WhatsApp Embedded Signup (Inicio de sesión con Facebook para empresas → Configuraciones).
+      ${can('config.ver') ? html`<a href="#/config/meta">Corregir en Configuración → WhatsApp</a>` : ''}</div></div>` : !p.lista ? html`<div class="alert warning mb">${icon('alert')}<div><b>Falta configurar la app de Meta.</b> Para el botón de conexión se necesitan el App ID, la clave secreta y el Configuration ID de Embedded Signup.
       ${can('config.ver') ? html`<a href="#/config/meta">Ir a Configuración → WhatsApp</a>` : 'Pídeselo al administrador.'}</div></div>` : ''}
     <div class="grid side">
       <div class="card"><div class="card-head"><h3>${icon('whatsapp', 'sm')} Número de la empresa</h3>

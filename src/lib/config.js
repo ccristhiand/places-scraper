@@ -77,6 +77,15 @@ function invalidar() { cache = null; }
 
 // Valida y guarda solo claves conocidas. Secretos vacíos = no cambiar.
 async function set(valores) {
+  // App de Meta: los IDs son solo números y el Configuration ID (Embedded Signup) no es el App ID
+  const actual = await getAll();
+  const appId = String(valores.meta_app_id ?? actual.meta_app_id ?? '').trim();
+  const configId = String(valores.meta_config_id ?? actual.meta_config_id ?? '').trim();
+  if (valores.meta_app_id && !/^\d{5,25}$/.test(appId)) throw new HttpError(400, 'El App ID debe tener solo números.');
+  if (valores.meta_config_id && !/^\d{5,25}$/.test(configId)) throw new HttpError(400, 'El Configuration ID debe tener solo números.');
+  if ((valores.meta_app_id !== undefined || valores.meta_config_id !== undefined) && appId && configId && appId === configId)
+    throw new HttpError(400, 'El Configuration ID no es el App ID: cópialo de Inicio de sesión con Facebook para empresas → Configuraciones (la de WhatsApp Embedded Signup).');
+
   const cambiadas = [];
   for (const [clave, raw] of Object.entries(valores || {})) {
     const d = DEFS[clave];

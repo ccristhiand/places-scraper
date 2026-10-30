@@ -45,6 +45,7 @@ router.get('/estado', requirePerm('config.ver', 'chat.ver', 'campanas.ver'), ah(
     cuenta: vistaCuenta(c),
     plataforma: {
       lista: app.lista,
+      config_invalido: app.configInvalido,
       // Datos públicos para el SDK de Facebook (el App Secret nunca sale del servidor)
       app_id: app.lista ? app.appId : null,
       config_id: app.lista ? app.configId : null,
@@ -226,7 +227,7 @@ router.post('/probar-app', requirePerm('config.editar'), ah(async (req, res) => 
   const app = await meta.app();
   if (!app.appId || !app.secret) throw new HttpError(422, 'Primero guarda el App ID y la clave secreta.');
   const d = await meta.graph('GET', app.appId, { query: { fields: 'id,name', access_token: `${app.appId}|${app.secret}` } });
-  res.json({ ok: true, app: d.name, config_id_ok: !!app.configId });
+  res.json({ ok: true, app: d.name, config_id_ok: !!app.configId && !app.configInvalido });
 }));
 
 // ── Plantillas ────────────────────────────────────────────────────────────

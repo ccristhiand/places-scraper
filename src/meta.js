@@ -77,7 +77,8 @@ async function app() {
     secret: c.meta_app_secret || '',
     configId: c.meta_config_id || '',
     verifyToken: c.meta_verify_token || '',
-    lista: !!(c.meta_app_id && c.meta_app_secret && c.meta_config_id),
+    lista: !!(c.meta_app_id && c.meta_app_secret && c.meta_config_id && c.meta_config_id !== c.meta_app_id),
+    configInvalido: !!(c.meta_config_id && c.meta_config_id === c.meta_app_id),
   };
 }
 
