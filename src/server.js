@@ -1,94 +1,143 @@
 require('dotenv').config();
-const express    = require('express');
-const http       = require('http');
-const { Server } = require('socket.io');
-const path       = require('path');
+require('./lib/env').ensureSecrets();
+const express      = require('express');
+const http         = require('http');
+const path         = require('path');
+const helmet       = require('helmet');
+const cookieParser = require('cookie-parser');
+const rateLimit    = require('express-rate-limit');
+const { Server }   = require('socket.io');
+
+const { requireAuth, csrfGuard, usuarioDesdeToken, COOKIE } = require('./lib/auth');
+const { HttpError } = require('./lib/utils');
+const { MetaError } = require('./meta');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, {
-  cors: { origin: '*', methods: ['GET','POST'] },
-  transports: ['websocket','polling'],
-  pingTimeout: 60000,
-  pingInterval: 25000,
-});
-global.io = io;
+const PORT   = process.env.PORT || 3000;
 
-const PORT = process.env.PORT || 3000;
+app.set('trust proxy', parseInt(process.env.TRUST_PROXY ?? '1', 10)); // detrás de nginx/PM2
+app.disable('x-powered-by');
 
-// CORS para permitir requests desde la landing en otro dominio
-app.use(function(req, res, next) {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
+// SDK de Facebook para Embedded Signup (conectar el número de WhatsApp con Meta)
+const FB = ['https://connect.facebook.net', 'https://www.facebook.com', 'https://web.facebook.com', 'https://*.facebook.com'];
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", 'https://connect.facebook.net'],
+      styleSrc:   ["'self'", "'unsafe-inline'"],
+      imgSrc:     ["'self'", 'data:', 'blob:', 'https://*.facebook.com', 'https://*.fbcdn.net'],
+      connectSrc: ["'self'", 'ws:', 'wss:', 'https://graph.facebook.com', ...FB],
+      frameSrc:   FB,
+      fontSrc:    ["'self'", 'data:'],
+      objectSrc:  ["'none'"],
+      frameAncestors: ["'none'"],
+      formAction: ["'self'", 'https://www.facebook.com'],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE === '1' ? [] : null,
+    },
+  },
+  // La ventana de Meta devuelve el resultado con postMessage: necesita conservar el vínculo con esta página
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  crossOriginEmbedderPolicy: false,
+  strictTransportSecurity: process.env.COOKIE_SECURE === '1',
+}));
+
+// ── Endpoints públicos (antes de los parsers globales) ────────────────────
+// Webhook de Meta: necesita el cuerpo crudo para validar la firma HMAC
+app.use('/api/webhook/meta', express.raw({ type: '*/*', limit: '2mb' }), require('./routes/webhook'));
+
+const leads = require('./routes/leads');
+// Ruta usada por la landing: POST /api/leads (el resto de /api/leads es privado)
+app.use('/api/leads', (req, res, next) => {
+  const raiz = req.path === '/' || req.path === '';
+  if (raiz && (req.method === 'POST' || req.method === 'OPTIONS')) return leads.publico(req, res, next);
   next();
 });
 
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(cookieParser());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
-const wa = require('./whatsapp');
-wa.setIO(io);
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 600, standardHeaders: 'draft-7', legacyHeaders: false });
+app.use('/api', apiLimiter);
 
-app.use('/api/ubigeo',   require('./routes/ubigeo'));
-app.use('/api/negocios', require('./routes/negocios'));
-app.use('/api/crm',      require('./routes/crm'));
-app.use('/api/campanas', require('./routes/campanas'));
-app.use('/api/envios',   require('./routes/envios'));
-app.use('/api/demos',    require('./routes/demos'));
-app.use('/api/chat',     require('./routes/chat'));
-app.use('/api/leads',    require('./routes/leads'));
-app.use('/api/config',   require('./routes/config'));
-app.use('/api/verificar', require('./routes/verificar'));
+app.use('/api/auth', require('./routes/auth'));
 
-app.get('/api/wa/status', (req, res) => res.json({ status: wa.getStatus() }));
-app.get('/api/wa/qr', (req, res) => {
-  const qr = wa.getQR();
-  if (!qr) return res.json({ ok: false, msg: 'Sin QR disponible' });
-  res.json({ ok: true, qr });
+// ── API privada: sesión + CSRF ────────────────────────────────────────────
+app.use('/api', csrfGuard, requireAuth);
+app.use('/api/usuarios',  require('./routes/usuarios'));
+app.use('/api/roles',     require('./routes/roles'));
+app.use('/api/contactos', require('./routes/contactos'));
+app.use('/api/crm',       require('./routes/crm'));
+app.use('/api/tareas',    require('./routes/tareas'));
+app.use('/api/agenda',    require('./routes/agenda'));
+app.use('/api/chat',      require('./routes/chat'));
+app.use('/api/campanas',  require('./routes/campanas'));
+app.use('/api/envios',    require('./routes/envios'));
+app.use('/api/whatsapp',  require('./routes/whatsapp'));
+app.use('/api/leads',     leads.router);
+app.use('/api/config',    require('./routes/config'));
+app.use('/api/ubigeo',    require('./routes/ubigeo'));
+app.use('/api',           require('./routes/panel'));
+
+app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
+
+// Archivos subidos: solo con sesión
+app.use('/uploads', requireAuth, express.static(path.join(__dirname, '../uploads'), {
+  dotfiles: 'deny', index: false,
+  setHeaders: res => res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'"),
+}));
+
+app.use(express.static(path.join(__dirname, '../public'), { index: 'index.html', extensions: ['html'] }));
+
+// ── Errores ───────────────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const esMeta = err instanceof MetaError;
+  const status = esMeta ? 502 : (err.status || err.statusCode || (err.code === 'LIMIT_FILE_SIZE' ? 400 : 500));
+  if (status >= 500 && !esMeta) console.error(`✗ ${req.method} ${req.originalUrl}:`, err);
+  // Los errores de Meta son informativos para el usuario; los internos no se exponen
+  const visible = err instanceof HttpError || status < 500 || esMeta;
+  res.status(status).json({
+    error: visible ? err.message : 'Ocurrió un error interno. Revisa los logs del servidor.',
+    codigo: err.codigo,
+  });
 });
-app.post('/api/wa/conectar', async (req, res) => {
-  try { await wa.connect(); res.json({ ok: true }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.post('/api/wa/desconectar', async (req, res) => {
-  try { await wa.desconectar(); res.json({ ok: true }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
 
-app.post('/api/wa/reiniciar-sesion', async (req, res) => {
-  try {
-    // Forzar borrado de sesión y reconexión limpia
-    await wa.desconectar();
-    const fs      = require('fs');
-    const path    = require('path');
-    const authDir = path.join(__dirname, '../.wa_auth');
-    if (fs.existsSync(authDir)) fs.rmSync(authDir, { recursive: true, force: true });
-    res.json({ ok: true, msg: 'Sesión eliminada. Escanea el QR para reconectar.' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+// ── Socket.io autenticado ─────────────────────────────────────────────────
+const io = new Server(server, { serveClient: true, cors: { origin: false } });
+global.io = io;
 
-app.get('/views/:view', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/views', req.params.view + '.html'));
+io.use(async (socket, next) => {
+  const cookies = Object.fromEntries(String(socket.handshake.headers.cookie || '').split(';')
+    .map(c => c.trim().split('=')).filter(p => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]));
+  let u;
+  try { u = await usuarioDesdeToken(cookies[COOKIE]); }
+  catch (e) { return next(new Error('temporal')); } // el cliente reintenta solo
+  if (!u || u.debe_cambiar_password) return next(new Error('no autorizado'));
+  socket.data.user = { id: u.id, nombre: u.nombre };
+  next();
 });
 
 io.on('connection', socket => {
-  console.log('Cliente conectado:', socket.id);
-  socket.emit('wa:status', { status: wa.getStatus() });
-  socket.on('disconnect', () => console.log('Cliente desconectado:', socket.id));
+  socket.join('auth');
+  socket.join(`u:${socket.data.user.id}`);
 });
 
-require('./scheduler').iniciar();
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Places CRM corriendo en http://0.0.0.0:${PORT}`);
-  const fs = require('fs');
-  const authDir = path.join(__dirname, '../.wa_auth');
-  if (fs.existsSync(authDir) && fs.readdirSync(authDir).length > 0) {
-    console.log('🔄 Reconectando WhatsApp con sesión guardada...');
-    wa.connect().catch(e => console.error('WA error:', e.message));
+// ── Arranque ──────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    await require('./setupDb').migrar({ log: () => {} });
+    console.log('✅ Base de datos verificada');
+  } catch (e) {
+    console.error('❌ No se pudo preparar la base de datos:', e.message);
+    process.exit(1);
   }
-});
+  require('./scheduler').iniciar();
+  server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
+    console.log(`🚀 CRM corriendo en http://localhost:${PORT}`);
+  });
+})();

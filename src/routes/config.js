@@ -1,43 +1,56 @@
 const express = require('express');
+const axios   = require('axios');
 const router  = express.Router();
 const db      = require('../db');
+const config  = require('../lib/config');
+const meta    = require('../meta');
+const { audit } = require('../lib/audit');
+const { requirePerm } = require('../lib/auth');
+const { tokenAleatorio } = require('../lib/crypto');
+const { ah, HttpError, entero } = require('../lib/utils');
 
-// GET /api/config
-router.get('/', async (req, res) => {
-  try {
-    const [rows] = await db.execute('SELECT * FROM configuracion');
-    const config = {};
-    rows.forEach(r => config[r.clave] = r.valor);
-    
-    // Agregar stats del día
-    const [[hoy]] = await db.execute(`
-      SELECT COUNT(*) as enviados_hoy FROM envios 
-      WHERE estado='enviado' AND DATE(enviado_at) = CURDATE()
-    `);
-    const [[pend]] = await db.execute(`
-      SELECT COUNT(*) as pendientes FROM envios WHERE estado='pendiente'
-    `);
-    
-    res.json({ ok: true, config, stats: { enviados_hoy: hoy.enviados_hoy, pendientes: pend.pendientes } });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+router.get('/', requirePerm('config.ver'), ah(async (req, res) => {
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({
+    ok: true,
+    valores: await config.vistaPublica(),
+    definiciones: Object.fromEntries(Object.entries(config.DEFS).map(([k, d]) => [k, { grupo: d.grupo, label: d.label, tipo: d.tipo || 'text', min: d.min, max: d.max }])),
+    webhook_url: `${base}/api/webhook/meta`,
+    leads_url: `${base}/api/leads`,
+  });
+}));
 
-// PUT /api/config
-router.put('/', async (req, res) => {
-  try {
-    const campos = ['delay_entre_mensajes','limite_diario','hora_inicio','hora_fin','envios_activo'];
-    for (const clave of campos) {
-      if (req.body[clave] !== undefined) {
-        await db.execute(
-          'INSERT INTO configuracion (clave,valor) VALUES (?,?) ON DUPLICATE KEY UPDATE valor=?',
-          [clave, req.body[clave], req.body[clave]]
-        );
-      }
-    }
-    // Notificar al proceso de envíos para que recargue la config
-    if (global.io) global.io.emit('config:actualizada', req.body);
-    res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+router.put('/', requirePerm('config.editar'), ah(async (req, res) => {
+  const cambiadas = await config.set(req.body.valores || {});
+  await audit(req, 'config_editada', { detalle: cambiadas });
+  res.json({ ok: true, cambiadas });
+}));
+
+router.post('/meta/verify-token', requirePerm('config.editar'), ah(async (req, res) => {
+  const token = tokenAleatorio(18);
+  await config.set({ meta_verify_token: token });
+  await audit(req, 'verify_token_regenerado');
+  res.json({ ok: true, token });
+}));
+
+router.post('/google/probar', requirePerm('config.editar'), ah(async (req, res) => {
+  const key = await config.get('google_api_key');
+  if (!key) throw new HttpError(400, 'No hay API key de Google configurada.');
+  const r = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+    params: { query: 'restaurante en Miraflores, Lima, Peru', key, language: 'es' }, timeout: 15000 });
+  if (!['OK', 'ZERO_RESULTS'].includes(r.data.status))
+    throw new HttpError(400, `Google respondió ${r.data.status}${r.data.error_message ? ': ' + r.data.error_message : ''}`);
+  res.json({ ok: true, resultados: r.data.results?.length || 0 });
+}));
+
+router.get('/auditoria', requirePerm('auditoria.ver'), ah(async (req, res) => {
+  const w = ['1=1'], v = [];
+  if (req.query.usuario_id) { w.push('usuario_id = ?'); v.push(parseInt(req.query.usuario_id, 10)); }
+  if (req.query.accion)     { w.push('accion LIKE ?');  v.push(`%${req.query.accion}%`); }
+  const lim = entero(req.query.limit, 50, 1, 200), off = entero(req.query.offset, 0, 0);
+  const [rows] = await db.query(`SELECT * FROM auditoria WHERE ${w.join(' AND ')} ORDER BY id DESC LIMIT ? OFFSET ?`, [...v, lim, off]);
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM auditoria WHERE ${w.join(' AND ')}`, v);
+  res.json({ ok: true, rows, total });
+}));
 
 module.exports = router;

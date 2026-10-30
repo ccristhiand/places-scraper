@@ -1,183 +1,117 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
-const wa      = require('../whatsapp');
+const meta    = require('../meta');
+const { requirePerm } = require('../lib/auth');
+const { filtroContactos, asegurarAcceso } = require('../lib/filtros');
+const { enviarAContacto, ventanaAbierta } = require('../lib/mensajeria');
+const { upload } = require('../lib/uploads');
+const { ah, HttpError, texto } = require('../lib/utils');
 
-function limpiarNumero(tel) {
-  if (!tel) return null;
-  const n = tel.replace(/[^0-9]/g, '');
-  if (n.length < 8) return null;
-  if (n.startsWith('51')) return n;
-  if (n.startsWith('9') && n.length === 9) return '51' + n;
+// Conversaciones: contactos con mensajes, más recientes primero
+router.get('/', requirePerm('chat.ver'), ah(async (req, res) => {
+  const { where, vals } = filtroContactos({ q: req.query.q, asignado: req.query.asignado }, req);
+  const extra = req.query.filtro === 'no_leidos' ? 'HAVING no_leidos > 0' : '';
+  const [rows] = await db.query(`
+    SELECT n.id, MAX(n.nombre) AS nombre, MAX(n.whatsapp) AS whatsapp, MAX(n.telefono) AS telefono,
+           MAX(n.estado_crm) AS estado_crm, MAX(n.asignado_a) AS asignado_a, MAX(u.nombre) AS asignado_nombre,
+           MAX(n.ultimo_entrante_at) AS ultimo_entrante_at, MAX(m.created_at) AS ultimo_msg,
+           SUM(m.direccion = 'entrante' AND m.leido = 0) AS no_leidos,
+           SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(LEFT(m.contenido, 80), '\n', ' ') ORDER BY m.created_at DESC SEPARATOR '\u0001'), '\u0001', 1) AS ultimo_texto,
+           SUBSTRING_INDEX(GROUP_CONCAT(m.direccion ORDER BY m.created_at DESC), ',', 1) AS ultima_direccion
+    FROM chat_mensajes m
+    JOIN negocios n ON n.id = m.negocio_id
+    LEFT JOIN usuarios u ON u.id = n.asignado_a
+    WHERE ${where}
+    GROUP BY n.id ${extra}
+    ORDER BY ultimo_msg DESC
+    LIMIT 200`, vals);
+  rows.forEach(r => { r.ventana_abierta = ventanaAbierta(r); r.no_leidos = Number(r.no_leidos || 0); });
+  res.json({ ok: true, rows });
+}));
+
+router.get('/no-leidos', requirePerm('chat.ver'), ah(async (req, res) => {
+  const { where, vals } = filtroContactos({}, req);
+  const [[r]] = await db.query(`SELECT COUNT(*) AS n FROM chat_mensajes m JOIN negocios n ON n.id = m.negocio_id
+    WHERE m.direccion = 'entrante' AND m.leido = 0 AND ${where}`, vals);
+  res.json({ ok: true, total: r.n });
+}));
+
+// ── Respuestas rápidas ────────────────────────────────────────────────────
+router.get('/respuestas', requirePerm('chat.ver'), ah(async (req, res) => {
+  const [rows] = await db.query('SELECT id, atajo, texto FROM respuestas_rapidas ORDER BY atajo');
+  res.json({ ok: true, rows });
+}));
+router.post('/respuestas', requirePerm('chat.enviar'), ah(async (req, res) => {
+  const atajo = texto(req.body.atajo, 40), t = texto(req.body.texto, 4000);
+  if (!atajo || !t) throw new HttpError(400, 'Completa el atajo y el texto.');
+  const [r] = await db.query('INSERT INTO respuestas_rapidas (atajo, texto, creado_por) VALUES (?,?,?)', [atajo.replace(/^\//, ''), t, req.user.id]);
+  res.json({ ok: true, id: r.insertId });
+}));
+router.delete('/respuestas/:id', requirePerm('chat.enviar'), ah(async (req, res) => {
+  await db.query('DELETE FROM respuestas_rapidas WHERE id = ?', [req.params.id]);
+  res.json({ ok: true });
+}));
+
+// ── Conversación ──────────────────────────────────────────────────────────
+router.get('/:negocioId', requirePerm('chat.ver'), ah(async (req, res) => {
+  const id = parseInt(req.params.negocioId, 10);
+  await asegurarAcceso(req, id);
+  const [[n]] = await db.query(`SELECT n.id, n.nombre, n.contacto_nombre, n.whatsapp, n.telefono, n.telefono_int, n.estado_crm,
+      n.ultimo_entrante_at, n.asignado_a, u.nombre AS asignado_nombre, n.distrito, n.email
+    FROM negocios n LEFT JOIN usuarios u ON u.id = n.asignado_a WHERE n.id = ?`, [id]);
+  const [msgs] = await db.query(`
+    SELECT * FROM (
+      SELECT m.*, us.nombre AS usuario_nombre FROM chat_mensajes m LEFT JOIN usuarios us ON us.id = m.usuario_id
+      WHERE m.negocio_id = ? ORDER BY m.created_at DESC, m.id DESC LIMIT 300
+    ) x ORDER BY created_at ASC, id ASC`, [id]);
+
+  const [[ultimoNoLeido]] = await db.query(
+    "SELECT wa_id FROM chat_mensajes WHERE negocio_id = ? AND direccion = 'entrante' AND leido = 0 ORDER BY created_at DESC LIMIT 1", [id]);
+  if (ultimoNoLeido) {
+    await db.query("UPDATE chat_mensajes SET leido = 1 WHERE negocio_id = ? AND direccion = 'entrante' AND leido = 0", [id]);
+    if (ultimoNoLeido.wa_id && req.user.can('chat.enviar')) meta.marcarLeido(ultimoNoLeido.wa_id);
+  }
+  n.ventana_abierta = ventanaAbierta(n);
+  res.json({ ok: true, contacto: n, msgs });
+}));
+
+async function contactoParaEnviar(req) {
+  const id = parseInt(req.params.negocioId, 10);
+  await asegurarAcceso(req, id);
+  const [[n]] = await db.query('SELECT * FROM negocios WHERE id = ?', [id]);
   return n;
 }
 
-// GET /api/chat — lista de conversaciones
-router.get('/', async (req, res) => {
-  try {
-    const [rows] = await db.execute(`
-      SELECT
-        n.id, n.nombre, n.telefono, n.distrito, n.wa_jid,
-        MAX(m.created_at) AS ultimo_msg,
-        SUM(CASE WHEN m.direccion='entrante' AND m.leido=0 THEN 1 ELSE 0 END) AS no_leidos,
-        SUBSTRING((
-          SELECT contenido FROM chat_mensajes
-          WHERE negocio_id = n.id
-          ORDER BY created_at DESC LIMIT 1
-        ), 1, 60) AS ultimo_texto
-      FROM chat_mensajes m
-      JOIN negocios n ON n.id = m.negocio_id
-      WHERE m.negocio_id IS NOT NULL
-      GROUP BY n.id, n.nombre, n.telefono, n.distrito, n.wa_jid
-      ORDER BY ultimo_msg DESC
-      LIMIT 100
-    `);
+router.post('/:negocioId/texto', requirePerm('chat.enviar'), ah(async (req, res) => {
+  const t = texto(req.body.texto, 4096);
+  if (!t) throw new HttpError(400, 'El mensaje está vacío.');
+  const n = await contactoParaEnviar(req);
+  const msg = await enviarAContacto(n, { texto: t }, { usuarioId: req.user.id });
+  res.json({ ok: true, msg });
+}));
 
-    // Huérfanos — mensajes sin negocio asociado
-    const [huerfanos] = await db.execute(`
-      SELECT
-        NULL AS id,
-        m.numero AS nombre,
-        m.numero AS telefono,
-        NULL AS distrito,
-        NULL AS wa_jid,
-        MAX(m.created_at) AS ultimo_msg,
-        SUM(CASE WHEN m.direccion='entrante' AND m.leido=0 THEN 1 ELSE 0 END) AS no_leidos,
-        SUBSTRING((
-          SELECT contenido FROM chat_mensajes cm2
-          WHERE cm2.numero = m.numero AND cm2.negocio_id IS NULL
-          ORDER BY cm2.created_at DESC LIMIT 1
-        ), 1, 60) AS ultimo_texto
-      FROM chat_mensajes m
-      WHERE m.negocio_id IS NULL
-      GROUP BY m.numero
-      ORDER BY ultimo_msg DESC
-      LIMIT 20
-    `);
+router.post('/:negocioId/imagen', requirePerm('chat.enviar'), upload.single('imagen'), ah(async (req, res) => {
+  if (!req.file) throw new HttpError(400, 'Adjunta una imagen.');
+  const n = await contactoParaEnviar(req);
+  const msg = await enviarAContacto(n, { imagenUrl: `/uploads/${req.file.filename}`, texto: texto(req.body.texto, 1024) || '' }, { usuarioId: req.user.id });
+  res.json({ ok: true, msg });
+}));
 
-    const todos = [...rows, ...huerfanos]
-      .sort((a,b) => new Date(b.ultimo_msg) - new Date(a.ultimo_msg));
-    res.json({ ok: true, rows: todos });
-  } catch(e) {
-    console.error('GET /api/chat error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// GET /api/chat/:negocioId
-router.get('/:negocioId', async (req, res) => {
-  try {
-    const nid = parseInt(req.params.negocioId);
-    if (isNaN(nid)) return res.json({ ok: true, msgs: [] });
-
-    const [[negocio]] = await db.execute('SELECT * FROM negocios WHERE id=?', [nid]);
-    if (!negocio) return res.json({ ok: true, msgs: [] });
-
-    // Variantes del número para asociar huérfanos
-    const numero   = limpiarNumero(negocio.whatsapp || negocio.telefono_int || negocio.telefono);
-    const waJid    = negocio.wa_jid;
-
-    if (numero || waJid) {
-      const numCorto = numero && numero.startsWith('51') ? numero.slice(2) : numero;
-      const numLargo = numero && !numero.startsWith('51') ? '51' + numero : numero;
-
-      // Asociar por número
-      if (numero) {
-        await db.execute(`
-          UPDATE chat_mensajes SET negocio_id=?
-          WHERE negocio_id IS NULL
-            AND REPLACE(REPLACE(numero,'+',''),' ','') IN (?,?,?)
-        `, [nid, numLargo || numero, numCorto || numero, numero]);
-      }
-
-      // Asociar por wa_jid (LID)
-      if (waJid) {
-        await db.execute(`
-          UPDATE chat_mensajes SET negocio_id=?
-          WHERE negocio_id IS NULL AND numero=?
-        `, [nid, waJid]);
-      }
-    }
-
-    const [msgs] = await db.execute(
-      'SELECT * FROM chat_mensajes WHERE negocio_id=? ORDER BY created_at ASC',
-      [nid]
-    );
-
-    await db.execute(
-      'UPDATE chat_mensajes SET leido=1 WHERE negocio_id=? AND direccion="entrante" AND leido=0',
-      [nid]
-    );
-
-    res.json({ ok: true, msgs });
-  } catch(e) {
-    console.error('GET /api/chat/:id error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /api/chat/:negocioId/enviar
-router.post('/:negocioId/enviar', async (req, res) => {
-  const { texto } = req.body;
-  const nid = req.params.negocioId;
-  if (!texto?.trim()) return res.status(400).json({ error: 'Mensaje vacío' });
-  try {
-    const [[n]] = await db.execute('SELECT * FROM negocios WHERE id=?', [nid]);
-    if (!n) return res.status(404).json({ error: 'Negocio no encontrado' });
-
-    // Preferir número real sobre wa_jid para envío
-    // (enviar al número siempre que sea posible — WA lo resuelve)
-    const numero = limpiarNumero(n.whatsapp || n.telefono_int || n.telefono);
-    if (!numero) return res.status(400).json({ error: 'Sin número de WhatsApp. Agrégalo en Contactos primero.' });
-
-    const waResult = await wa.enviarMensaje({ numero, texto, negocioId: +nid });
-
-    // Guardamos con wa_id para que el evento saliente lo descarte como duplicado
-    // y no cree un huérfano
-    await db.execute(
-      'INSERT INTO chat_mensajes (negocio_id, numero, direccion, contenido, wa_id) VALUES (?,?,?,?,?)',
-      [nid, numero, 'saliente', texto, waResult?.key?.id || null]
-    );
-    res.json({ ok: true });
-  } catch(e) {
-    console.error('POST /api/chat/enviar error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// GET /api/chat/huerfano/:numero — mensajes de un contacto huérfano
-router.get('/huerfano/:numero', async (req, res) => {
-  try {
-    const numero = decodeURIComponent(req.params.numero);
-    const [msgs] = await db.execute(
-      'SELECT * FROM chat_mensajes WHERE numero=? ORDER BY created_at ASC',
-      [numero]
-    );
-    await db.execute(
-      'UPDATE chat_mensajes SET leido=1 WHERE numero=? AND direccion="entrante" AND leido=0',
-      [numero]
-    );
-    res.json({ ok: true, msgs });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /api/chat/asociar — asociar número huérfano a negocio manualmente
-router.post('/asociar', async (req, res) => {
-  const { numero, negocio_id } = req.body;
-  if (!numero || !negocio_id) return res.status(400).json({ error: 'Faltan datos' });
-  try {
-    const [r] = await db.execute(
-      'UPDATE chat_mensajes SET negocio_id=? WHERE numero=? AND negocio_id IS NULL',
-      [negocio_id, numero]
-    );
-    // Guardar wa_jid en el negocio
-    await db.execute('UPDATE negocios SET wa_jid=? WHERE id=?', [numero, negocio_id]);
-    res.json({ ok: true, actualizados: r.affectedRows });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+router.post('/:negocioId/plantilla', requirePerm('chat.enviar'), ah(async (req, res) => {
+  const n = await contactoParaEnviar(req);
+  const nombre = texto(req.body.nombre, 200);
+  if (!nombre) throw new HttpError(400, 'Selecciona una plantilla.');
+  const lista = await meta.listarPlantillas();
+  const t = lista.find(x => x.nombre === nombre && x.idioma === req.body.idioma) || lista.find(x => x.nombre === nombre);
+  if (!t) throw new HttpError(400, 'La plantilla no existe en tu cuenta de WhatsApp.');
+  if (t.estado !== 'APPROVED') throw new HttpError(400, 'La plantilla aún no está aprobada por Meta.');
+  const params = (req.body.params || []).map(p => texto(p, 1000) || '-').slice(0, t.variables);
+  if (params.length < t.variables) throw new HttpError(400, `La plantilla necesita ${t.variables} variable(s).`);
+  const msg = await enviarAContacto(n, { plantilla: {
+    nombre: t.nombre, idioma: t.idioma, params, cuerpo: t.cuerpo, header: t.header, headerUrl: req.body.header_url || null,
+  } }, { usuarioId: req.user.id });
+  res.json({ ok: true, msg });
+}));
 
 module.exports = router;

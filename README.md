@@ -1,91 +1,68 @@
-# Places CRM — Sistema completo de ventas con WhatsApp 🚀
+# CRM Comercial — Prospección, WhatsApp y ventas
 
-## Módulos incluidos
+CRM web para equipos comerciales: prospecta negocios con Google Places, conversa y lanza campañas con la **API oficial de WhatsApp (Meta Cloud API)** y gestiona el embudo de ventas con tareas, agenda y reportes.
 
-| Módulo | Descripción |
+## Módulos
+
+| Módulo | Qué hace |
 |---|---|
-| 🔍 **Buscar** | Búsqueda Google Places por departamento/provincia/distrito |
-| 👥 **Contactos** | Base de datos con historial CRM y notas |
-| 📝 **Campañas** | Plantillas de mensajes con imágenes y variables |
-| 📤 **Envíos** | Envío masivo WhatsApp con cola y progreso en tiempo real |
-| 💬 **Chat** | Historial de conversaciones por cliente |
-| 📊 **CRM** | Embudo de ventas drag & drop |
-| 📅 **Demos** | Agendamiento con recordatorios automáticos por WA |
-
----
+| **Panel** | KPIs, embudo, mensajes de 14 días, mis tareas, próximas reuniones y actividad reciente |
+| **Bandeja** | Conversaciones de WhatsApp en tiempo real, ventana de 24 h, plantillas, imágenes y respuestas rápidas (`/`) |
+| **Contactos** | Búsqueda y filtros avanzados, ficha con historial, etiquetas, asignación, acciones masivas y exportación CSV |
+| **Pipeline** | Kanban con etapas configurables, valor estimado y motivo de pérdida |
+| **Agenda** | Calendario mensual de reuniones con recordatorios automáticos por WhatsApp (24 h y 1 h antes) |
+| **Tareas** | Seguimientos con prioridad, vencimiento y aviso antes de vencer |
+| **Prospección** | Búsqueda en Google Places por departamento/provincia/distrito e importación al CRM |
+| **Leads web** | Formulario público de la landing; conversión a contacto en un clic |
+| **Campañas** | Plantillas aprobadas por Meta con variables mapeadas a datos del contacto, o texto libre (ventana 24 h) |
+| **Envíos** | Cola única con horario, días, límite diario, reintentos y reanudación automática; estados entregado/leído |
+| **Reportes** | Entrega y lectura de campañas, respuestas, conversión, rubros, distritos y rendimiento por vendedor |
+| **Usuarios y roles** | Usuarios, roles con 30 permisos granulares, contraseñas temporales y bloqueo de cuentas |
+| **Configuración** | Empresa, Meta, Google, envíos, bandeja, recordatorios, etapas, leads y políticas de seguridad |
+| **Auditoría** | Registro de accesos y acciones sensibles |
 
 ## Instalación
 
 ```bash
-# 1. Instalar dependencias
 npm install
-
-# 2. Configurar entorno
-cp .env.example .env
-# Edita .env con tu API Key de Google y credenciales MySQL
-
-# 3. Crear base de datos
-npm run setup-db
-
-# 4. Iniciar
+cp .env.example .env   # completa la conexión MySQL y el administrador inicial
 npm start
 ```
 
-Abre: **http://localhost:3000**
+Al arrancar, el servidor aplica automáticamente las migraciones de la base de datos (solo **agregan** tablas, columnas e índices; no borran datos). También puedes ejecutarlas por separado con `npm run setup-db`.
 
----
+Abre `http://localhost:3010` e ingresa con `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Se pedirá cambiar la contraseña en el primer ingreso.
 
-## Configuración .env
+En producción (PM2): `pm2 start ecosystem.config.js`, detrás de nginx con HTTPS y `COOKIE_SECURE=1`.
 
-```env
-GOOGLE_API_KEY=AIzaSy...
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=tu_password
-DB_NAME=places_crm
-PORT=3000
-```
+## Conectar WhatsApp (Meta Cloud API)
 
----
+1. En [developers.facebook.com](https://developers.facebook.com) crea una app de tipo *Empresa* y agrega el producto **WhatsApp**.
+2. Registra tu número y anota el **Phone Number ID** y el **WhatsApp Business Account ID**.
+3. Crea un **usuario del sistema** en el Business Manager y genera un **token permanente** con los permisos `whatsapp_business_messaging` y `whatsapp_business_management`.
+4. Copia la **clave secreta de la app** (Configuración → Básica).
+5. En el CRM: **Configuración → WhatsApp (Meta)**, pega los datos y pulsa **Probar conexión**.
+6. En Meta → WhatsApp → Configuración → **Webhook**, pega la URL y el token de verificación que muestra el CRM y suscríbete al campo `messages`. Meta exige HTTPS público.
+7. Crea tus **plantillas** en el Administrador de WhatsApp; cuando estén aprobadas aparecerán en Campañas y en la Bandeja.
 
-## WhatsApp
+> WhatsApp solo permite mensajes libres hasta 24 h después del último mensaje del cliente. Fuera de esa ventana se usan plantillas aprobadas. El CRM lo controla automáticamente.
 
-1. Haz clic en **"Conectar"** en la esquina inferior del menú lateral
-2. Escanea el QR con tu WhatsApp → Dispositivos vinculados → Vincular dispositivo
-3. La sesión se guarda en `.wa_auth/` — no necesitas escanear cada vez
+## Seguridad
 
-**Recomendaciones:**
-- Usa un número secundario dedicado para ventas
-- El sistema usa delay de 10 segundos entre mensajes masivos para evitar bloqueos
-- Los recordatorios de demos se envían automáticamente 24h y 1h antes
+- Contraseñas con **bcrypt**; sesión en cookie `httpOnly` + `SameSite=Strict` (y `Secure` con HTTPS).
+- Cambio de contraseña obligatorio en el primer ingreso y tras un restablecimiento; política de largo mínimo configurable.
+- Bloqueo temporal tras intentos fallidos y límite de peticiones en el login, la API y el formulario público.
+- Roles y permisos verificados en el servidor; los vendedores solo ven sus contactos asignados.
+- Protección CSRF (cabecera propia + SameSite), cabeceras de seguridad con Helmet y CSP estricta.
+- Tokens de Meta y Google **cifrados con AES-256-GCM** en la base de datos (clave `APP_KEY`).
+- Webhook validado con la firma HMAC `X-Hub-Signature-256` de Meta.
+- Archivos subidos solo imágenes, con nombre aleatorio y servidos únicamente con sesión.
+- Auditoría de inicios de sesión, cambios de usuarios/roles/configuración, exportaciones y envíos masivos.
 
----
+## Formulario de leads
 
-## Recordatorios automáticos
-
-El scheduler revisa cada minuto si hay demos próximas y envía WA automáticamente:
-- **24 horas antes**: mensaje con fecha completa y link
-- **1 hora antes**: mensaje de recordatorio urgente
-
----
+La landing envía `POST /api/leads` con JSON: `nombre`, `whatsapp`, `clinica` (o `empresa`), `plan`, y opcionalmente `ciclo`, `email`, `pais`, `mensaje`. Configura los dominios permitidos en **Configuración → Formulario de leads**.
 
 ## Variables en campañas
 
-En el diseñador de campañas puedes usar:
-- `{{nombre}}` → Nombre del negocio
-- `{{telefono}}` → Teléfono
-- `{{distrito}}` → Distrito
-- `{{provincia}}` → Provincia  
-- `{{departamento}}` → Departamento
-
----
-
-## Flujo recomendado
-
-1. **Buscar** negocios por distrito → **Guardar** en BD
-2. Diseñar **campaña** con mensaje + imagen
-3. **Envío masivo** seleccionando contactos
-4. Mover en **CRM** según respuesta
-5. **Agendar demo** → recordatorio automático por WA
-6. Ver **historial de chat** por cliente
+`{{nombre}}` negocio · `{{contacto}}` persona · `{{telefono}}` · `{{distrito}}` · `{{provincia}}` · `{{departamento}}` · `{{rubro}}` · `{{responsable}}` vendedor asignado.

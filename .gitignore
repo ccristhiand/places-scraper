@@ -1,2 +1,32 @@
-/.env
+# Dependencias
 /node_modules
+
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Sesión antigua de WhatsApp (Baileys) — contiene credenciales
+.wa_auth/
+
+# Archivos subidos por usuarios y mensajes entrantes
+/uploads/*
+!/uploads/.gitkeep
+
+# Logs
+/logs
+*.log
+npm-debug.log*
+
+# Empaquetados y respaldos
+*.zip
+*.rar
+*.tar.gz
+*.sql
+*.bak
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
