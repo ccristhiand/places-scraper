@@ -1,5 +1,6 @@
-import { html, icon, api, render as dibujar, acciones, fmt, toastError, $, cargando, vacio, avatar } from '../core.js';
+import { html, raw, icon, api, render as dibujar, acciones, fmt, toastError, $, cargando, vacio, avatar } from '../core.js';
 import { barras, hbarras } from '../ui.js';
+import { TIPOS, dinero } from '../proyecto.js';
 
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const haceISO = d => new Date(Date.now() - d * 864e5).toISOString().slice(0, 10);
@@ -67,6 +68,46 @@ async function cargar(el) {
         <div class="card"><div class="card-head"><h3>Rubros con más contactos</h3></div><div class="card-body">${hbarras(r.rubros, { color: 'var(--text-2)' })}</div></div>
         <div class="card"><div class="card-head"><h3>Distritos con más contactos</h3></div><div class="card-body">${hbarras(r.distritos, { color: 'var(--text-2)' })}</div></div>
         <div class="card"><div class="card-head"><h3>Origen de contactos</h3></div><div class="card-body">${hbarras(r.origenes, { color: 'var(--text-2)' })}</div></div>
-      </div>`);
+      </div>
+      ${r.proyectos ? reporteProyectos(r.proyectos) : ''}`);
   } catch (e) { toastError(e); }
+}
+
+// ── Proyectos: cobros por mes, facturación por tipo, clientes y rentabilidad ──
+function reporteProyectos(p) {
+  const monedas = [...new Set(p.cobros_por_mes.map(c => c.moneda))];
+  const meses = [];
+  for (let i = 11; i >= 0; i--) { const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - i); meses.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`); }
+  const colores = { PEN: '#2459c6', USD: '#17803d' };
+  const datos = meses.map(m => ({
+    etiqueta: new Date(`${m}-15T12:00:00`).toLocaleDateString('es-PE', { month: 'short' }).replace('.', ''),
+    ...Object.fromEntries(monedas.map(mo => [mo, Number(p.cobros_por_mes.find(c => c.mes === m && c.moneda === mo)?.total || 0)])),
+  }));
+  const conv = p.conversion || {};
+  return html`
+    <h2 class="mt mb" style="margin-top:28px">Proyectos</h2>
+    <div class="grid side mb">
+      <div class="card"><div class="card-head"><h3>Cobrado por mes · 12 meses</h3></div><div class="card-body">
+        ${monedas.length ? barras(datos, monedas.map(m => ({ clave: m, nombre: m === 'PEN' ? 'Soles' : 'Dólares', color: colores[m] || '#71717a' })))
+          : vacio({ icono: 'dollar', titulo: 'Aún no hay cobros registrados' })}</div></div>
+      <div class="card"><div class="card-head"><h3>Por tipo de proyecto</h3></div><div class="card-body">
+        ${p.por_tipo.length ? p.por_tipo.map(t => html`<div class="row between small" style="padding:5px 0;border-bottom:1px solid var(--border)">
+          <span>${TIPOS[t.tipo] || t.tipo} <span class="muted">· ${t.proyectos}</span></span><b>${dinero(t.total, t.moneda)}</b></div>`) : html`<p class="small muted">Sin proyectos aprobados.</p>`}
+        ${Number(conv.total) ? html`<div class="xs muted mt">Propuestas del período: ${conv.total} · ganadas ${conv.ganadas || 0} · perdidas ${conv.perdidas || 0} (${fmt.pct(conv.ganadas, conv.total)} de cierre)</div>` : ''}
+      </div></div>
+    </div>
+    <div class="grid c2">
+      <div class="card"><div class="card-head"><h3>Clientes que más compran</h3></div><div class="table-wrap"><table class="table">
+        <thead><tr><th>Cliente</th><th>Proyectos</th><th>Total</th><th>Saldo</th></tr></thead><tbody>
+        ${p.clientes.map(c => html`<tr><td class="strong small">${c.nombre}</td><td class="small">${c.proyectos}</td><td class="small num">${dinero(c.total, c.moneda)}</td>
+          <td class="small num" style="${Number(c.saldo) > 0 ? 'color:var(--warning)' : ''}">${dinero(c.saldo, c.moneda)}</td></tr>`)}
+        ${p.clientes.length ? '' : html`<tr><td colspan="4" class="muted small center">Sin datos</td></tr>`}</tbody></table></div></div>
+      <div class="card"><div class="card-head"><h3>Rentabilidad por proyecto</h3><span class="xs muted">con horas registradas</span></div><div class="table-wrap"><table class="table">
+        <thead><tr><th>Proyecto</th><th>Horas</th><th>Ingreso</th><th>Costo</th><th>Margen</th></tr></thead><tbody>
+        ${p.rentabilidad.map(x => html`<tr><td class="small"><b>${x.nombre}</b><div class="xs muted mono">${x.codigo}</div></td>
+          <td class="small num">${Number(x.horas)}${x.horas_estimadas ? html`<span class="xs muted"> / ${Number(x.horas_estimadas)}</span>` : ''}</td>
+          <td class="small num">${dinero(x.ingreso, x.moneda)}</td><td class="small num">${dinero(x.costo, x.moneda)}</td>
+          <td class="small num" style="color:${raw(x.margen_pct !== null && x.margen_pct < 20 ? 'var(--danger)' : 'var(--success)')}">${x.margen_pct !== null ? `${x.margen_pct} %` : '—'}</td></tr>`)}
+        ${p.rentabilidad.length ? '' : html`<tr><td colspan="5" class="muted small center">Registra horas en los proyectos para ver su rentabilidad.</td></tr>`}</tbody></table></div></div>
+    </div>`;
 }

@@ -188,5 +188,6 @@ export const TIPO_ACTIVIDAD = {
   email: ['mail', 'Correo', 'tone-info'], whatsapp: ['whatsapp', 'WhatsApp', 'tone-success'], visita: ['pin', 'Visita', 'tone-warning'],
   estado: ['kanban', 'Cambio de etapa', 'tone-primary'], tarea: ['checkSquare', 'Tarea', 'tone-success'], sistema: ['zap', 'Sistema', 'tone-muted'],
   mensaje: ['whatsapp', 'Mensaje', 'tone-success'], demo: ['calendar', 'Reunión', 'tone-primary'],
+  proyecto: ['layers', 'Proyecto', 'tone-primary'],
 };
 export { esc };

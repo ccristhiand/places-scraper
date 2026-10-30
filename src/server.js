@@ -78,6 +78,7 @@ app.use('/api/chat',      require('./routes/chat'));
 app.use('/api/campanas',  require('./routes/campanas'));
 app.use('/api/envios',    require('./routes/envios'));
 app.use('/api/whatsapp',  require('./routes/whatsapp'));
+app.use('/api/proyectos', require('./routes/proyectos'));
 app.use('/api/leads',     leads.router);
 app.use('/api/config',    require('./routes/config'));
 app.use('/api/ubigeo',    require('./routes/ubigeo'));

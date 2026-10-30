@@ -1,6 +1,7 @@
 // Ficha de contacto en panel lateral (se abre desde contactos, pipeline, bandeja, leads…)
 import { html, raw, icon, api, $, render, acciones, toast, toastError, confirmar, fmt, etapas, etapaBadge, avatar, can, cargando, vacio, opciones, conCarga, menu } from './core.js';
 import { formContacto, formTarea, formReunion, enlaceWa, TIPO_ACTIVIDAD } from './ui.js';
+import { formProyecto, abrirProyecto, estadoBadge, dinero, fechaCorta, TIPOS } from './proyecto.js';
 
 export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
   const ov = document.createElement('div');
@@ -46,7 +47,7 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
         <button class="btn btn-sm btn-ghost btn-icon right" data-act="mas" aria-label="Más acciones">${icon('more')}</button>
       </div>
       <div class="tabs" style="margin:10px 0 0;border:0">
-        ${[['resumen', 'Resumen'], ['actividad', 'Actividad'], ['tareas', `Tareas${cuentas.tareas ? ` (${cuentas.tareas})` : ''}`], ['reuniones', `Reuniones${cuentas.reuniones ? ` (${cuentas.reuniones})` : ''}`]]
+        ${[['resumen', 'Resumen'], ['actividad', 'Actividad'], ['tareas', `Tareas${cuentas.tareas ? ` (${cuentas.tareas})` : ''}`], ['reuniones', `Reuniones${cuentas.reuniones ? ` (${cuentas.reuniones})` : ''}`], ...(can('proyectos.ver') ? [['proyectos', 'Proyectos']] : [])]
           .map(([k, t]) => html`<button class="tab ${actual === k ? 'active' : ''}" data-act="tab" data-tab="${k}">${t}</button>`)}
       </div></div>`;
   }
@@ -126,6 +127,24 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
         : vacio({ icono: 'checkSquare', titulo: 'Sin tareas', texto: 'Crea recordatorios de seguimiento para este contacto.' })}`);
   }
 
+  async function proyectos(cont) {
+    const { rows } = await api.get('/api/proyectos', { negocio_id: id });
+    const montos = can('proyectos.montos');
+    const contratados = rows.filter(p => !['propuesta', 'cancelado'].includes(p.estado));
+    const totales = [...new Set(contratados.map(p => p.moneda))]
+      .map(m => dinero(contratados.filter(p => p.moneda === m).reduce((s, p) => s + p.monto, 0), m)).join(' + ');
+    render(cont, html`
+      <div class="row mb">${montos && contratados.length ? html`<span class="small muted">Total contratado: <b>${totales}</b></span>` : ''}
+        ${can('proyectos.gestionar') ? html`<button class="btn btn-primary btn-sm right" data-act="nuevo-proyecto">${icon('plus', 'sm')} Nuevo proyecto</button>` : ''}</div>
+      ${rows.length ? html`<div class="card">${rows.map(p => html`<a href="#" class="list-item" data-act="ver-proyecto" data-id="${p.id}">
+        <div class="grow"><div class="row"><span class="strong">${p.nombre}</span>${estadoBadge(p.estado)}</div>
+          <div class="xs muted"><span class="mono">${p.codigo}</span> · ${TIPOS[p.tipo] || p.tipo}${p.fecha_entrega_real ? ` · entregado ${fechaCorta(p.fecha_entrega_real)}`
+            : p.fecha_entrega_estimada ? ` · entrega ${fechaCorta(p.fecha_entrega_estimada)}` : ''}${p.estado === 'soporte' ? ` · soporte ${p.dias_soporte_restantes} d` : ''}</div></div>
+        ${montos ? html`<div class="small num" style="text-align:right"><div class="strong">${dinero(p.monto, p.moneda)}</div>
+          ${p.saldo > 0 && !['propuesta', 'cancelado'].includes(p.estado) ? html`<div class="xs" style="color:var(--warning)">saldo ${dinero(p.saldo, p.moneda)}</div>` : ''}</div>` : ''}</a>`)}</div>`
+        : vacio({ icono: 'layers', titulo: 'Sin proyectos', texto: 'Registra aquí los desarrollos que le vendes a este cliente.' })}`);
+  }
+
   async function reuniones(cont) {
     const { rows } = await api.get('/api/agenda', { negocio_id: id });
     render(cont, html`
@@ -145,6 +164,7 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
       if (actual === 'actividad') await actividad(cont);
       if (actual === 'tareas') await tareas(cont);
       if (actual === 'reuniones') await reuniones(cont);
+      if (actual === 'proyectos') await proyectos(cont);
     } catch (e) { toastError(e); }
     $('[data-etapa]', drawer)?.addEventListener('change', async e => {
       const etapa = e.target.value;
@@ -173,6 +193,8 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
       try { await api.del(`/api/crm/actividad/${el.dataset.id}`); pintar(); } catch (e) { toastError(e); }
     },
     'nueva-tarea': async () => { if (await formTarea(null, { negocio: c })) { cambiado = true; await cargar(); pintar(); toast('Tarea creada'); } },
+    'nuevo-proyecto': async () => { if (await formProyecto(null, { negocio: c })) { cambiado = true; pintar(); } },
+    'ver-proyecto': b => abrirProyecto(b.dataset.id, { onCambio: () => { cambiado = true; pintar(); } }),
     'nueva-reunion': async () => { if (await formReunion(null, { negocio: c })) { cambiado = true; await cargar(); pintar(); toast('Reunión agendada'); } },
   });
   drawer.addEventListener('change', async e => {

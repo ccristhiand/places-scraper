@@ -338,6 +338,155 @@ async function migrar({ log = console.log } = {}) {
     INDEX idx_tarea_asig (asignado_a, estado, vence_at)
   ) ${T}`);
 
+  // ── Proyectos de desarrollo (por cliente) ──────────────────────────────
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyectos (
+    id                     INT AUTO_INCREMENT PRIMARY KEY,
+    codigo                 VARCHAR(20) NOT NULL UNIQUE,
+    negocio_id             INT NOT NULL,
+    nombre                 VARCHAR(200) NOT NULL,
+    tipo                   VARCHAR(30) DEFAULT 'web',
+    alcance                TEXT NULL,
+    estado                 VARCHAR(20) DEFAULT 'propuesta',
+    responsable_id         INT NULL,
+    moneda                 VARCHAR(3) DEFAULT 'PEN',
+    monto                  DECIMAL(12,2) DEFAULT 0,
+    incluye_igv            TINYINT(1) DEFAULT 1,
+    fecha_inicio           DATE NULL,
+    duracion_dias          INT NULL,
+    fecha_entrega_estimada DATE NULL,
+    fecha_entrega_real     DATE NULL,
+    dias_soporte           INT DEFAULT 30,
+    fecha_fin_soporte      DATE NULL,
+    url_repo               VARCHAR(500) NULL,
+    url_demo               VARCHAR(500) NULL,
+    url_produccion         VARCHAR(500) NULL,
+    notas                  TEXT NULL,
+    aviso_entrega          TINYINT(1) DEFAULT 0,
+    aviso_soporte          TINYINT(1) DEFAULT 0,
+    creado_por             INT NULL,
+    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE,
+    INDEX idx_proy_estado (estado),
+    INDEX idx_proy_neg (negocio_id)
+  ) ${T}`);
+
+  // Plan de pagos (cuotas acordadas)
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_cuotas (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id   INT NOT NULL,
+    orden         INT DEFAULT 0,
+    concepto      VARCHAR(150) NOT NULL,
+    monto         DECIMAL(12,2) NOT NULL,
+    vence_at      DATE NULL,
+    aviso_previo  TINYINT(1) DEFAULT 0,
+    aviso_vencida TINYINT(1) DEFAULT 0,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE
+  ) ${T}`);
+
+  // Cobros recibidos
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_pagos (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id     INT NOT NULL,
+    cuota_id        INT NULL,
+    monto           DECIMAL(12,2) NOT NULL,
+    fecha           DATE NOT NULL,
+    metodo          VARCHAR(30) DEFAULT 'transferencia',
+    referencia      VARCHAR(150) NULL,
+    comprobante_url VARCHAR(500) NULL,
+    registrado_por  INT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE,
+    FOREIGN KEY (cuota_id) REFERENCES proyecto_cuotas(id) ON DELETE SET NULL
+  ) ${T}`);
+  await addCol('crm_historial', 'proyecto_id', 'INT NULL');
+  await addCol('tareas', 'proyecto_id', 'INT NULL');
+  await addCol('proyectos', 'monto_base',      'DECIMAL(12,2) NULL');
+  await addCol('proyectos', 'horas_estimadas', 'DECIMAL(8,2) NULL');
+  await addCol('proyectos', 'costo_hora',      'DECIMAL(10,2) NULL');
+  await conn.query('UPDATE proyectos SET monto_base = monto WHERE monto_base IS NULL');
+
+  // Hitos / entregables (avance)
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_hitos (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id    INT NOT NULL,
+    orden          INT DEFAULT 0,
+    titulo         VARCHAR(200) NOT NULL,
+    descripcion    TEXT NULL,
+    fecha_objetivo DATE NULL,
+    peso           INT DEFAULT 1,
+    completado     TINYINT(1) DEFAULT 0,
+    completado_at  DATETIME NULL,
+    completado_por INT NULL,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE
+  ) ${T}`);
+
+  // Cambios de alcance (trabajo adicional que pide el cliente)
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_cambios (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id INT NOT NULL,
+    titulo      VARCHAR(200) NOT NULL,
+    descripcion TEXT NULL,
+    monto       DECIMAL(12,2) DEFAULT 0,
+    dias_extra  INT DEFAULT 0,
+    estado      VARCHAR(15) DEFAULT 'pendiente',
+    resuelto_at DATETIME NULL,
+    creado_por  INT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE
+  ) ${T}`);
+
+  // Incidencias (soporte y post-entrega)
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_tickets (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id     INT NOT NULL,
+    numero          INT NOT NULL,
+    titulo          VARCHAR(200) NOT NULL,
+    descripcion     TEXT NULL,
+    tipo            VARCHAR(20) DEFAULT 'error',
+    prioridad       VARCHAR(10) DEFAULT 'media',
+    estado          VARCHAR(15) DEFAULT 'abierto',
+    cubierto        TINYINT(1) DEFAULT 1,
+    monto_adicional DECIMAL(12,2) NULL,
+    asignado_a      INT NULL,
+    solucion        TEXT NULL,
+    resuelto_at     DATETIME NULL,
+    creado_por      INT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE,
+    INDEX idx_ticket_estado (estado)
+  ) ${T}`);
+  await addCol('proyecto_tickets', 'cambio_id', 'INT NULL');
+
+  // Horas trabajadas (rentabilidad)
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_horas (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id INT NOT NULL,
+    usuario_id  INT NULL,
+    fecha       DATE NOT NULL,
+    horas       DECIMAL(6,2) NOT NULL,
+    descripcion VARCHAR(300) NULL,
+    hito_id     INT NULL,
+    ticket_id   INT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE,
+    INDEX idx_horas_fecha (fecha)
+  ) ${T}`);
+
+  // Documentos del proyecto (contrato, propuesta, acta de entrega…)
+  await conn.query(`CREATE TABLE IF NOT EXISTS proyecto_archivos (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    proyecto_id INT NOT NULL,
+    tipo        VARCHAR(20) DEFAULT 'otro',
+    nombre      VARCHAR(255) NOT NULL,
+    url         VARCHAR(500) NOT NULL,
+    tamano      INT NULL,
+    mime        VARCHAR(100) NULL,
+    subido_por  INT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE
+  ) ${T}`);
+
   await conn.query(`CREATE TABLE IF NOT EXISTS notificaciones (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     usuario_id INT NOT NULL,
@@ -393,6 +542,7 @@ async function migrar({ log = console.log } = {}) {
     'dashboard.ver', 'contactos.ver', 'contactos.crear', 'contactos.editar', 'pipeline.ver', 'pipeline.mover',
     'chat.ver', 'chat.enviar', 'campanas.ver', 'envios.ver', 'agenda.ver', 'agenda.gestionar',
     'tareas.ver', 'tareas.gestionar', 'leads.ver', 'prospeccion.buscar',
+    'proyectos.ver', 'proyectos.gestionar', 'proyectos.montos',
   ];
   const lectura = TODOS.filter(p => p.endsWith('.ver') && !['config.ver', 'auditoria.ver'].includes(p)).concat('contactos.ver_todos');
   const roles = [
@@ -404,6 +554,37 @@ async function migrar({ log = console.log } = {}) {
   for (const [nombre, desc, permisos, sistema] of roles) {
     await conn.query('INSERT IGNORE INTO roles (nombre, descripcion, permisos, es_sistema) VALUES (?,?,?,?)',
       [nombre, desc, JSON.stringify(permisos), sistema]);
+  }
+
+  // Permisos del módulo Proyectos en los roles que ya existían (una sola vez)
+  const [[migProy]] = await conn.query("SELECT 1 AS ok FROM configuracion WHERE clave = 'mig_permisos_proyectos'");
+  if (!migProy) {
+    const todos = ['proyectos.ver', 'proyectos.gestionar', 'proyectos.montos'];
+    for (const [nombre, nuevos] of [['Supervisor', todos], ['Vendedor', todos], ['Solo lectura', ['proyectos.ver']]]) {
+      const [[r]] = await conn.query('SELECT id, permisos FROM roles WHERE nombre = ?', [nombre]);
+      if (!r) continue;
+      let p = []; try { p = JSON.parse(r.permisos); } catch { p = []; }
+      if (p.includes('*')) continue;
+      await conn.query('UPDATE roles SET permisos = ? WHERE id = ?', [JSON.stringify([...new Set([...p, ...nuevos])]), r.id]);
+    }
+    await conn.query("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('mig_permisos_proyectos', '1', 'Migración aplicada')");
+    log('  + permisos de Proyectos agregados a los roles');
+  }
+  const [[migProy2]] = await conn.query("SELECT 1 AS ok FROM configuracion WHERE clave = 'mig_permisos_proyectos_2'");
+  if (!migProy2) {
+    for (const nombre of ['Supervisor', 'Vendedor']) {
+      const [[r]] = await conn.query('SELECT id, permisos FROM roles WHERE nombre = ?', [nombre]);
+      if (!r) continue;
+      let p = []; try { p = JSON.parse(r.permisos); } catch { p = []; }
+      if (p.includes('*')) continue;
+      await conn.query('UPDATE roles SET permisos = ? WHERE id = ?', [JSON.stringify([...new Set([...p, 'proyectos.trabajar'])]), r.id]);
+    }
+    // Rol para el equipo técnico: trabaja en los proyectos sin ver montos
+    await conn.query('INSERT IGNORE INTO roles (nombre, descripcion, permisos, es_sistema) VALUES (?,?,?,0)',
+      ['Desarrollador', 'Equipo técnico: avance, horas e incidencias, sin ver montos',
+       JSON.stringify(['dashboard.ver', 'proyectos.ver', 'proyectos.trabajar', 'tareas.ver', 'tareas.gestionar', 'agenda.ver', 'contactos.ver', 'contactos.ver_todos'])]);
+    await conn.query("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('mig_permisos_proyectos_2', '1', 'Migración aplicada')");
+    log('  + permiso proyectos.trabajar y rol Desarrollador');
   }
 
   const [[{ n: nUsuarios }]] = await conn.query('SELECT COUNT(*) AS n FROM usuarios');

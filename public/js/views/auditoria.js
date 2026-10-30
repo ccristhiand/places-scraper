@@ -10,6 +10,8 @@ const NOMBRES = {
   rol_creado: ['Rol creado', 'info'], rol_editado: ['Rol editado', 'info'], rol_eliminado: ['Rol eliminado', 'danger'],
   config_editada: ['Configuración', 'warning'], envio_masivo: ['Envío masivo', 'primary'], contacto_eliminado: ['Contacto eliminado', 'danger'],
   contactos_exportados: ['Exportación CSV', 'warning'], contactos_importados: ['Importación', 'info'],
+  proyecto_creado: ['Proyecto creado', 'info'], proyecto_estado: ['Estado de proyecto', 'primary'], proyecto_pago: ['Cobro registrado', 'success'],
+  proyecto_pago_eliminado: ['Cobro anulado', 'danger'], proyecto_eliminado: ['Proyecto eliminado', 'danger'],
 };
 
 export async function render(el) {

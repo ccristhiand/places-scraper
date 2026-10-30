@@ -42,6 +42,11 @@ const DEFS = {
   leads_origenes:        { grupo: 'leads', def: '*', label: 'Orígenes permitidos (CORS)' },
   leads_alerta_numero:   { grupo: 'leads', def: '', label: 'WhatsApp para alertas de nuevos leads' },
 
+  // Proyectos de desarrollo
+  proyectos_costo_hora:     { grupo: 'proyectos', def: '0', label: 'Costo por hora del equipo (para la rentabilidad)' },
+  proyectos_wa_cobros:      { grupo: 'proyectos', def: '0', tipo: 'bool', label: 'Avisar al cliente por WhatsApp cuando una cuota está por vencer' },
+  proyectos_wa_entrega:     { grupo: 'proyectos', def: '0', tipo: 'bool', label: 'Avisar al cliente por WhatsApp cuando se entrega el proyecto' },
+
   // Seguridad
   seguridad_sesion_horas:  { grupo: 'seguridad', def: '8', tipo: 'int', min: 1, max: 720, label: 'Duración de la sesión (horas)' },
   seguridad_intentos_max:  { grupo: 'seguridad', def: '5', tipo: 'int', min: 3, max: 20, label: 'Intentos fallidos antes de bloquear' },

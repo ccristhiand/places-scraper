@@ -128,7 +128,39 @@ router.get('/reportes', requirePerm('reportes.ver'), ah(async (req, res) => {
 
   const [origenes] = await db.query(`SELECT x.nombre, COUNT(*) AS total FROM (SELECT COALESCE(origen,'google') AS nombre FROM negocios) x GROUP BY x.nombre ORDER BY total DESC`);
 
-  res.json({ ok: true, desde, hasta, envios, campanas, etapas, rubros, distritos, vendedores, origenes });
+  // Proyectos (solo con permiso de ver montos)
+  let proyectos = null;
+  if (req.user.can('proyectos.montos')) {
+    const costoDef = Number(await config.get('proyectos_costo_hora')) || 0;
+    const [cobros] = await db.query(`SELECT DATE_FORMAT(x.fecha, '%Y-%m') AS mes, p.moneda, SUM(x.monto) AS total
+      FROM proyecto_pagos x JOIN proyectos p ON p.id = x.proyecto_id
+      WHERE x.fecha >= DATE_FORMAT(? - INTERVAL 11 MONTH, '%Y-%m-01') AND x.fecha < DATE_ADD(?, INTERVAL 1 DAY)
+      GROUP BY mes, p.moneda ORDER BY mes`, [hasta, hasta]);
+    const [porTipo] = await db.query(`SELECT tipo, moneda, COUNT(*) AS proyectos, SUM(monto) AS total FROM proyectos
+      WHERE estado NOT IN ('propuesta','cancelado') GROUP BY tipo, moneda ORDER BY total DESC`);
+    const [clientes] = await db.query(`SELECT n.id, n.nombre, p.moneda, COUNT(*) AS proyectos, SUM(p.monto) AS total,
+        SUM(p.monto - COALESCE(pg.pagado, 0)) AS saldo
+      FROM proyectos p JOIN negocios n ON n.id = p.negocio_id
+      LEFT JOIN (SELECT proyecto_id, SUM(monto) AS pagado FROM proyecto_pagos GROUP BY proyecto_id) pg ON pg.proyecto_id = p.id
+      WHERE p.estado NOT IN ('propuesta','cancelado')
+      GROUP BY n.id, n.nombre, p.moneda ORDER BY total DESC LIMIT 10`);
+    const [rent] = await db.query(`SELECT p.id, p.codigo, p.nombre, p.moneda, p.monto, p.incluye_igv, p.horas_estimadas,
+        COALESCE(p.costo_hora, ?) AS costo_hora, COALESCE(SUM(h.horas), 0) AS horas
+      FROM proyectos p LEFT JOIN proyecto_horas h ON h.proyecto_id = p.id
+      WHERE p.estado NOT IN ('propuesta','cancelado') GROUP BY p.id HAVING horas > 0 ORDER BY p.id DESC LIMIT 15`, [costoDef]);
+    const [[conv]] = await db.query(`SELECT SUM(estado NOT IN ('propuesta','cancelado')) AS ganadas, SUM(estado = 'cancelado') AS perdidas, COUNT(*) AS total
+      FROM proyectos WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`, R);
+    proyectos = {
+      cobros_por_mes: cobros, por_tipo: porTipo, clientes, conversion: conv,
+      rentabilidad: rent.map(p => {
+        const ingreso = Number(p.incluye_igv) ? Number(p.monto) / 1.18 : Number(p.monto);
+        const costo = Number(p.horas) * Number(p.costo_hora);
+        return { ...p, ingreso: Math.round(ingreso), costo: Math.round(costo), margen_pct: ingreso ? Math.round(((ingreso - costo) / ingreso) * 100) : null };
+      }),
+    };
+  }
+
+  res.json({ ok: true, desde, hasta, envios, campanas, etapas, rubros, distritos, vendedores, origenes, proyectos });
 }));
 
 // ── Notificaciones del usuario ────────────────────────────────────────────

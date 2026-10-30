@@ -24,7 +24,11 @@ function iniciar() {
   // Avisos del webhook que no se pudieron procesar
   cron.schedule('*/5 * * * *', () => barrerPendientes());
   setTimeout(barrerPendientes, 20000);
-  console.log('⏰ Scheduler activo (campañas, recordatorios, tareas y webhook)');
+  // Proyectos: cuotas por vencer/vencidas, entregas, fin de soporte (cada hora, y al arrancar)
+  const alertasProyectos = () => require('./lib/proyectos').alertas().catch(e => console.error('Alertas de proyectos:', e.message));
+  cron.schedule('5 * * * *', alertasProyectos);
+  setTimeout(alertasProyectos, 30000);
+  console.log('⏰ Scheduler activo (campañas, recordatorios, tareas, webhook y proyectos)');
 }
 
 // Recordatorio único por reunión: 24 h antes (si se agendó con margen) y 1 h antes

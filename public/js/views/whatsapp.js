@@ -192,7 +192,10 @@ function nuevaPlantilla(el) {
         <div class="row wrap">${Object.entries(DATOS).map(([k, t]) => html`<button type="button" class="tag" data-tag="${k}" title="${t}" style="cursor:pointer">[${k}]</button>`)}
           <button type="button" class="tag" data-tag="empresa" title="Nombre de tu empresa (fijo)" style="cursor:pointer">[empresa]</button></div></label>
       <label class="field span-2"><span>Pie (opcional)</span><input class="input" name="pie" maxlength="60" placeholder="Responde SALIR si no deseas recibir mensajes"></label>
-      <div class="span-2"><div class="label" style="margin-bottom:6px">Vista previa</div><div class="bubble out" style="max-width:100%" data-prev>…</div><ul class="reqs" data-problemas></ul></div>
+      <label class="field"><span>Botón con enlace (opcional)</span><input class="input" name="boton_texto" maxlength="25" placeholder="Crear cuenta gratis"><span class="hint">Hasta 25 caracteres.</span></label>
+      <label class="field"><span>Enlace del botón</span><input class="input" name="boton_url" type="url" maxlength="2000" placeholder="https://tuerkapp.com/registro"><span class="hint">Debe empezar con https://</span></label>
+      <div class="span-2"><div class="label" style="margin-bottom:6px">Vista previa</div><div class="bubble out" style="max-width:100%" data-prev>…</div>
+        <div class="bubble out hidden" data-prev-boton style="max-width:100%;margin-top:2px;text-align:center;color:var(--primary);font-weight:500"></div><ul class="reqs" data-problemas></ul></div>
     </form>`,
     foot: html`<button class="btn" data-close>Cancelar</button><button class="btn btn-primary" data-enviar>Enviar a revisión</button>`,
     onMount: m => {
@@ -202,6 +205,9 @@ function nuevaPlantilla(el) {
         const empresa = session.empresa || 'tu empresa';
         const cuerpo = f.cuerpo.value.replace(/\[([a-z_]+)\]/gi, (x, k) => k.toLowerCase() === 'empresa' ? empresa : (EJEMPLO[k.toLowerCase()] ?? x));
         $('[data-prev]', f).textContent = [enc === 'texto' ? f.encabezado.value : '', cuerpo, f.pie.value].filter(Boolean).join('\n\n') || '…';
+        const bp = $('[data-prev-boton]', f);
+        bp.textContent = f.boton_texto.value ? `↗ ${f.boton_texto.value}` : '';
+        bp.classList.toggle('hidden', !f.boton_texto.value);
         // Las mismas reglas que revisa el servidor (y que más rechaza Meta)
         const t = f.cuerpo.value.trim().replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, '[$1]'), p = [];
         if (/\{\{\s*([a-z_]+)\s*\}\}/i.test(f.cuerpo.value)) p.push('{{dato}} se convertirá en [dato] automáticamente.');
@@ -236,7 +242,8 @@ function nuevaPlantilla(el) {
       $('[data-enviar]', m.el).addEventListener('click', async e => {
         if (!f.nombre.value || !f.cuerpo.value.trim()) return toast('Completa el nombre y el mensaje.', 'warning');
         const fd = new FormData();
-        ['nombre', 'categoria', 'cuerpo', 'pie'].forEach(k => fd.append(k, f[k].value));
+        if (f.boton_texto.value.trim() && !/^https:\/\//i.test(f.boton_url.value.trim())) return toast('El enlace del botón debe empezar con https://', 'warning');
+        ['nombre', 'categoria', 'cuerpo', 'pie', 'boton_texto', 'boton_url'].forEach(k => fd.append(k, f[k].value.trim()));
         fd.append('encabezado_tipo', enc);
         if (enc === 'texto') fd.append('encabezado', f.encabezado.value);
         if (enc === 'imagen' && f.imagen.files[0]) fd.append('imagen', f.imagen.files[0]);

@@ -3,7 +3,7 @@ import { html, raw, icon, api, render as dibujar, acciones, can, toast, toastErr
 const TABS = [
   ['empresa', 'Empresa', 'settings'], ['meta', 'WhatsApp (Meta)', 'whatsapp'], ['google', 'Google Places', 'search'],
   ['envios', 'Envíos masivos', 'send'], ['chat', 'Bandeja y recordatorios', 'chat'], ['pipeline', 'Etapas del pipeline', 'kanban'],
-  ['leads', 'Formulario de leads', 'inbox'], ['seguridad', 'Seguridad', 'shield'],
+  ['leads', 'Formulario de leads', 'inbox'], ['proyectos', 'Proyectos', 'layers'], ['seguridad', 'Seguridad', 'shield'],
 ];
 const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const ZONAS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/Santiago', 'America/Argentina/Buenos_Aires', 'America/Guayaquil', 'America/La_Paz', 'America/Caracas', 'Europe/Madrid'];
@@ -128,6 +128,11 @@ async function pintar(el) {
       <div class="span-2">${copia('URL del formulario', st.cfg.leads_url)}</div>
       ${campo('leads_origenes', { span: true, hint: 'Dominios desde los que se acepta el formulario, separados por coma (ej. https://mi-landing.com). * = cualquiera (no recomendado).' })}
       ${campo('leads_alerta_numero', { span: true, hint: html`Número que recibe un aviso por cada lead nuevo (opcional). Usa la plantilla del sistema "crm_alerta_lead" de <a href="#/whatsapp/recordatorios">WhatsApp → Recordatorios</a>.` })}`)}`; break;
+
+    case 'proyectos': cuerpo = seccion('Proyectos de desarrollo', 'Rentabilidad y avisos automáticos a tus clientes.', html`
+      ${campo('proyectos_costo_hora', { span: true, tipo: 'text', placeholder: 'Ej. 25', hint: 'Cuánto te cuesta una hora de trabajo del equipo (sueldo, herramientas…). Cada proyecto puede tener su propio costo.' })}
+      ${campo('proyectos_wa_cobros', { span: true, hint: html`Envía la plantilla "crm_proyecto_cuota" 3 días antes de cada vencimiento. Envíala a revisión en <a href="#/whatsapp/recordatorios">WhatsApp → Recordatorios</a>.` })}
+      ${campo('proyectos_wa_entrega', { span: true, hint: html`Envía la plantilla "crm_proyecto_entrega" al marcar el proyecto como entregado.` })}`); break;
 
     case 'seguridad': cuerpo = seccion('Políticas de seguridad', 'Aplican a todos los usuarios.', html`
       ${campo('seguridad_sesion_horas', { hint: 'Al vencer, el usuario debe volver a iniciar sesión.' })}${campo('seguridad_password_min')}

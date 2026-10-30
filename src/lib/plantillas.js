@@ -17,13 +17,14 @@ const EJEMPLOS = {
   provincia: 'Lima', departamento: 'Lima', rubro: 'ferreterías', responsable: 'Carlos',
   fecha: 'jueves 30 de octubre', hora: '10:30 a. m.', lead: 'Juan Pérez', empresa_lead: 'Clínica Huellitas',
   whatsapp: '51987654321', plan: 'Profesional',
+  proyecto: 'Sistema de citas', concepto: 'Adelanto (50 %)', monto: 'S/ 1,500', dias: '30',
 };
 
 /**
  * Revisa la plantilla con las reglas que más rechaza Meta.
  * Devuelve la lista de problemas (vacía = OK).
  */
-function validarPlantilla({ nombre, categoria, cuerpo, ejemplos, pie, encabezado }) {
+function validarPlantilla({ nombre, categoria, cuerpo, ejemplos, pie, encabezado, boton }) {
   const p = [];
   if (!/^[a-z0-9_]{1,512}$/.test(nombre || '')) p.push('El nombre solo puede tener minúsculas, números y guion bajo (ej. promo_octubre).');
   if (!['UTILITY', 'MARKETING'].includes(categoria)) p.push('Elige la categoría: Utilidad o Marketing.');
@@ -45,6 +46,10 @@ function validarPlantilla({ nombre, categoria, cuerpo, ejemplos, pie, encabezado
   if (pie && String(pie).length > 60) p.push('El pie de mensaje no puede pasar de 60 caracteres.');
   if (encabezado && String(encabezado).length > 60) p.push('El encabezado no puede pasar de 60 caracteres.');
   if (encabezado && meta.variablesDe(encabezado).length) p.push('El encabezado no puede tener datos variables.');
+  if (boton) {
+    if (!boton.texto || boton.texto.length > 25) p.push('El texto del botón es obligatorio y puede tener hasta 25 caracteres.');
+    if (!/^https:\/\/[^\s{}]+\.[^\s{}]+$/i.test(boton.url || '') || boton.url.length > 2000) p.push('El enlace del botón debe empezar con https:// (ej. https://tuerkapp.com/registro).');
+  }
   return [...new Set(p)];
 }
 
@@ -71,7 +76,7 @@ async function convertirEtiquetas(texto, permitidas = Object.keys(VARIABLES)) {
   return { cuerpo: t, nombres, ejemplos: nombres.map(n => EJEMPLOS[n] || n) };
 }
 
-function componentes({ encabezado, cuerpo, pie, ejemplos, imagenHandle }) {
+function componentes({ encabezado, cuerpo, pie, ejemplos, imagenHandle, boton }) {
   const nVars = [...new Set(meta.variablesDe(cuerpo))].length;
   const c = [];
   if (imagenHandle) c.push({ type: 'HEADER', format: 'IMAGE', example: { header_handle: [imagenHandle] } });
@@ -80,11 +85,13 @@ function componentes({ encabezado, cuerpo, pie, ejemplos, imagenHandle }) {
   if (nVars) body.example = { body_text: [ejemplos.slice(0, nVars)] };
   c.push(body);
   if (pie) c.push({ type: 'FOOTER', text: pie });
+  // Botón de enlace fijo (no necesita parámetros al enviar)
+  if (boton) c.push({ type: 'BUTTONS', buttons: [{ type: 'URL', text: boton.texto, url: boton.url }] });
   return c;
 }
 
 // Crea la plantilla en Meta (queda en revisión) y la registra localmente
-async function crear({ nombre, categoria, idioma = 'es', cuerpoEtiquetas, encabezado, pie, imagen, uso = 'manual', esSistema = 0, permitidas, usuarioId = null }) {
+async function crear({ nombre, categoria, idioma = 'es', cuerpoEtiquetas, encabezado, pie, imagen, boton = null, uso = 'manual', esSistema = 0, permitidas, usuarioId = null }) {
   const conv = await convertirEtiquetas(cuerpoEtiquetas, permitidas);
   const datos = {
     nombre: String(nombre || '').trim().toLowerCase(),
@@ -94,6 +101,7 @@ async function crear({ nombre, categoria, idioma = 'es', cuerpoEtiquetas, encabe
     cuerpo: conv.cuerpo,
     pie: String(pie || '').trim(),
     ejemplos: conv.ejemplos,
+    boton: boton && (boton.texto || boton.url) ? { texto: String(boton.texto || '').trim(), url: String(boton.url || '').trim() } : null,
   };
   const problemas = validarPlantilla(datos);
   if (problemas.length) { const e = new HttpError(422, problemas[0]); e.problemas = problemas; throw e; }
@@ -166,6 +174,14 @@ const SISTEMA = [
     descripcion: 'Avisa al número configurado cada vez que llega un lead desde el formulario web.',
     datos: ['lead', 'empresa_lead', 'whatsapp', 'plan'],
     texto: 'Nuevo lead en el CRM: [lead] de [empresa_lead], WhatsApp [whatsapp], interesado en el plan [plan]. Revísalo en el panel.' },
+  { uso: 'proyecto_cuota', nombre: 'crm_proyecto_cuota', categoria: 'UTILITY', titulo: 'Cuota de proyecto por vencer',
+    descripcion: 'Recuerda al cliente una cuota de su proyecto 3 días antes del vencimiento (si lo activas en Configuración → Proyectos).',
+    datos: ['contacto', 'concepto', 'proyecto', 'monto', 'fecha'],
+    texto: 'Hola [contacto], te recordamos que la cuota "[concepto]" del proyecto [proyecto] por [monto] vence el [fecha]. Si ya realizaste el pago, envíanos el comprobante por aquí. ¡Gracias!' },
+  { uso: 'proyecto_entrega', nombre: 'crm_proyecto_entrega', categoria: 'UTILITY', titulo: 'Proyecto entregado',
+    descripcion: 'Avisa al cliente que su proyecto fue entregado y cuántos días de soporte tiene (si lo activas en Configuración → Proyectos).',
+    datos: ['contacto', 'proyecto', 'dias'],
+    texto: 'Hola [contacto], tu proyecto [proyecto] ya fue entregado por [empresa]. Desde hoy cuentas con [dias] días de soporte: escríbenos por aquí ante cualquier consulta.' },
 ];
 
 async function estadoSistema() {

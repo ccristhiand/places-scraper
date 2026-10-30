@@ -9,6 +9,7 @@ const RUTAS = [
   { id: 'pipeline',   titulo: 'Pipeline',     icono: 'kanban',      perm: 'pipeline.ver' },
   { id: 'agenda',     titulo: 'Agenda',       icono: 'calendar',    perm: 'agenda.ver' },
   { id: 'tareas',     titulo: 'Tareas',       icono: 'checkSquare', perm: 'tareas.ver' },
+  { id: 'proyectos',  titulo: 'Proyectos',    icono: 'layers',      perm: 'proyectos.ver' },
   { grupo: 'Captación' },
   { id: 'prospeccion',titulo: 'Prospección',  icono: 'search',      perm: 'prospeccion.buscar' },
   { id: 'leads',      titulo: 'Leads web',    icono: 'inbox',       perm: 'leads.ver' },

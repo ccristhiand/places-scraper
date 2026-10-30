@@ -244,6 +244,7 @@ router.post('/plantillas', requirePerm('campanas.gestionar'), upload.single('ima
     nombre: b.nombre, categoria: b.categoria, idioma: texto(b.idioma, 20) || 'es',
     cuerpoEtiquetas: b.cuerpo, encabezado: encTipo === 'texto' ? b.encabezado : '', pie: b.pie,
     imagen: req.file ? rutaUpload(`/uploads/${req.file.filename}`) : null,
+    boton: { texto: b.boton_texto, url: b.boton_url },
     uso: b.categoria === 'MARKETING' ? 'campana' : 'manual', usuarioId: req.user.id,
   });
   await audit(req, 'plantilla_creada', { entidad: 'plantilla', entidadId: b.nombre });

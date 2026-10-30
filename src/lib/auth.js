@@ -43,6 +43,12 @@ const PERMISOS = {
     'tareas.ver':       'Ver tareas',
     'tareas.gestionar': 'Crear y editar tareas',
   },
+  'Proyectos': {
+    'proyectos.ver':       'Ver proyectos de desarrollo',
+    'proyectos.gestionar': 'Crear y editar proyectos, cambiar su estado',
+    'proyectos.montos':    'Ver montos, plan de pagos, rentabilidad y registrar cobros',
+    'proyectos.trabajar':  'Completar hitos, registrar horas y atender incidencias',
+  },
   'Leads': {
     'leads.ver':       'Ver leads del formulario web',
     'leads.gestionar': 'Gestionar y convertir leads',

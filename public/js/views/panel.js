@@ -1,6 +1,7 @@
 import { html, raw, icon, api, render as dibujar, acciones, fmt, session, can, vacio, toastError, bus } from '../core.js';
 import { barras, serieDias, formTarea, formReunion } from '../ui.js';
 import { abrirContacto } from '../contacto.js';
+import { dinero, fechaCorta } from '../proyecto.js';
 
 let subs = [];
 export function destroy() { subs.forEach(f => f()); subs = []; }
@@ -11,7 +12,14 @@ const kpi = (ic, tone, label, valor, sub, href) => html`<a class="card kpi" href
 const hoy = () => { const s = fmt.dia(new Date()); return s.charAt(0).toUpperCase() + s.slice(1); };
 
 export async function render_(el) {
-  const d = await api.get('/api/dashboard');
+  const [d, pr] = await Promise.all([
+    api.get('/api/dashboard'),
+    can('proyectos.ver') ? api.get('/api/proyectos').then(r => ({
+      resumen: r.resumen,
+      proximas: r.rows.filter(p => ['aprobado', 'desarrollo', 'pruebas'].includes(p.estado) && p.fecha_entrega_estimada)
+        .sort((a, b) => a.fecha_entrega_estimada.localeCompare(b.fecha_entrega_estimada)).slice(0, 3),
+    })).catch(() => null) : null,
+  ]);
   const k = d.kpi;
   const maxEmbudo = Math.max(1, ...d.embudo.map(e => e.total));
   const pendientesHoy = Number(d.tareas_resumen?.vencidas || 0) + Number(d.tareas_resumen?.hoy || 0);
@@ -73,6 +81,17 @@ export async function render_(el) {
             <div style="font-size:20px;font-weight:700;line-height:1">${new Date(r.fecha_hora).toLocaleDateString('es-PE', { day: 'numeric', timeZone: 'America/Lima' })}</div></div>
             <div class="grow"><div class="small strong truncate">${r.nombre}</div><div class="xs muted">${fmt.hora(r.fecha_hora)} · ${r.titulo}</div></div></a>`)
             : vacio({ icono: 'calendar', titulo: 'Sin reuniones próximas' })}</div></div>
+
+        ${pr ? html`<div class="card"><div class="card-head"><h3>${icon('layers', 'sm')} Proyectos</h3><a class="small" href="#/proyectos">Ver todos</a></div>
+          <div class="card-body" style="padding-bottom:6px">
+            <div class="row between small"><span class="muted">En curso</span><b>${pr.resumen.activos}</b></div>
+            ${pr.resumen.por_cobrar ? html`<div class="row between small" style="margin-top:6px"><span class="muted">Por cobrar</span>
+              <b style="${pr.resumen.cuotas_vencidas ? 'color:var(--warning)' : ''}">${Object.entries(pr.resumen.por_cobrar).map(([m, v]) => dinero(v, m)).join(' + ') || dinero(0)}</b></div>` : ''}
+            ${pr.resumen.atrasados ? html`<div class="row between small" style="margin-top:6px"><span class="muted">Atrasados</span><b style="color:var(--danger)">${pr.resumen.atrasados}</b></div>` : ''}
+          </div>
+          ${pr.proximas.map(p => html`<a class="list-item" href="#/proyectos/${p.id}"><div class="grow"><div class="small strong truncate">${p.nombre}</div>
+            <div class="xs ${p.atrasado ? '' : 'muted'}" style="${p.atrasado ? 'color:var(--danger)' : ''}">${p.cliente} · entrega ${fechaCorta(p.fecha_entrega_estimada)}</div></div></a>`)}
+        </div>` : ''}
 
         ${d.leads ? html`<a class="card kpi" href="#/leads" style="color:inherit;text-decoration:none"><div class="kpi-icon tone-warning">${icon('inbox')}</div>
           <div><div class="kpi-label">Leads web nuevos</div><div class="kpi-value">${fmt.num(d.leads.nuevos)}</div><div class="kpi-sub">${fmt.num(d.leads.total)} en total</div></div></a>` : ''}
