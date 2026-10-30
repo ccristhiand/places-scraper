@@ -203,14 +203,20 @@ function nuevaPlantilla(el) {
         const cuerpo = f.cuerpo.value.replace(/\[([a-z_]+)\]/gi, (x, k) => k.toLowerCase() === 'empresa' ? empresa : (EJEMPLO[k.toLowerCase()] ?? x));
         $('[data-prev]', f).textContent = [enc === 'texto' ? f.encabezado.value : '', cuerpo, f.pie.value].filter(Boolean).join('\n\n') || '…';
         // Las mismas reglas que revisa el servidor (y que más rechaza Meta)
-        const t = f.cuerpo.value.trim(), p = [];
+        const t = f.cuerpo.value.trim().replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, '[$1]'), p = [];
+        if (/\{\{\s*([a-z_]+)\s*\}\}/i.test(f.cuerpo.value)) p.push('{{dato}} se convertirá en [dato] automáticamente.');
+        if (/\{\{\s*\d+\s*\}\}/.test(t)) p.push('No uses {{1}}, {{2}}: inserta los datos con los botones.');
         if (/^\[(?!empresa\])[a-z_]+\]/i.test(t)) p.push('No empieces el mensaje con un dato.');
         if (/\[(?!empresa\])[a-z_]+\][\s.!?¡¿]*$/i.test(t)) p.push('No termines el mensaje con un dato: agrega texto después.');
         if (/\[(?!empresa\])[a-z_]+\]\s*\[(?!empresa\])[a-z_]+\]/i.test(t)) p.push('No pongas dos datos seguidos.');
         dibujar($('[data-problemas]', f), html`${p.map(x => html`<li style="color:var(--warning)">• ${x}</li>`)}`);
       };
       f.addEventListener('input', prev);
-      f.nombre.addEventListener('input', () => { f.nombre.value = f.nombre.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''); });
+      // Nombre para Meta: sin tildes ni símbolos (días → dias, "a - b" → a_b)
+      f.nombre.addEventListener('change', () => {
+        f.nombre.value = f.nombre.value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 100);
+      });
       f.addEventListener('click', e => {
         const b = e.target.closest('[data-e]');
         if (b) {

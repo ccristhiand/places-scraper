@@ -31,6 +31,8 @@ function validarPlantilla({ nombre, categoria, cuerpo, ejemplos, pie, encabezado
   if (!txt) p.push('Escribe el texto del mensaje.');
   if (txt.length > 1024) p.push('El mensaje no puede pasar de 1024 caracteres.');
 
+  // Meta solo acepta variables numeradas {{1}}, {{2}}… (otro contenido entre llaves = INVALID_FORMAT)
+  if (/\{\{(?!\s*\d+\s*\}\})/.test(txt)) p.push('Hay un dato con formato inválido entre llaves {{ }}. Usa los botones de datos.');
   const unicas = [...new Set(meta.variablesDe(txt))].sort((a, b) => a - b);
   unicas.forEach((n, i) => { if (n !== i + 1) p.push('Las variables deben ir en orden: {{1}}, {{2}}, {{3}}…'); });
   if (/^\{\{\s*\d+\s*\}\}/.test(txt)) p.push('El mensaje no puede empezar con un dato variable.');
@@ -53,6 +55,9 @@ function validarPlantilla({ nombre, categoria, cuerpo, ejemplos, pie, encabezado
 async function convertirEtiquetas(texto, permitidas = Object.keys(VARIABLES)) {
   let t = String(texto || '').replace(/\r/g, '').trim();
   if (/\{\{\s*\d+\s*\}\}/.test(t)) throw new HttpError(422, 'Usa los botones de datos ([contacto], [distrito]…) en lugar de {{1}}, {{2}}.');
+  // Formato de las campañas antiguas ({{nombre}}, {{distrito}}): se trata igual que [nombre], [distrito]
+  t = t.replace(/\{\{\s*([a-z_]{1,30})\s*\}\}/gi, '[$1]');
+  if (/\{\{|\}\}/.test(t)) throw new HttpError(422, 'Hay llaves {{ }} que Meta no acepta. Para insertar datos usa los botones [contacto], [distrito]…');
   const empresa = (await config.get('empresa_nombre')) || 'nuestra empresa';
   t = t.replace(/\[empresa\]/gi, empresa);
   const nombres = [];
