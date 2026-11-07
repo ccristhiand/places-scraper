@@ -19,7 +19,8 @@ router.get('/', requirePerm('chat.ver'), ah(async (req, res) => {
            MAX(n.ultimo_entrante_at) AS ultimo_entrante_at, MAX(m.created_at) AS ultimo_msg,
            SUM(m.direccion = 'entrante' AND m.leido = 0) AS no_leidos,
            SUBSTRING_INDEX(GROUP_CONCAT(REPLACE(LEFT(m.contenido, 80), '\n', ' ') ORDER BY m.created_at DESC SEPARATOR '\u0001'), '\u0001', 1) AS ultimo_texto,
-           SUBSTRING_INDEX(GROUP_CONCAT(m.direccion ORDER BY m.created_at DESC), ',', 1) AS ultima_direccion
+           SUBSTRING_INDEX(GROUP_CONCAT(m.direccion ORDER BY m.created_at DESC), ',', 1) AS ultima_direccion,
+           SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(m.estado_entrega, '') ORDER BY m.created_at DESC), ',', 1) AS ultimo_estado
     FROM chat_mensajes m
     JOIN negocios n ON n.id = m.negocio_id
     LEFT JOIN usuarios u ON u.id = n.asignado_a

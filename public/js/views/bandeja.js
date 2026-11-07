@@ -4,17 +4,44 @@ import { abrirContacto } from '../contacto.js';
 let subs = [], st;
 export function destroy() { subs.forEach(f => f()); subs = []; }
 
-const CHECK = { enviado: '✓', entregado: '✓✓', leido: '✓✓', fallido: '!' };
+// Checks estilo WhatsApp (SVG): uno = enviado, dos = entregado, dos azules = leído
+const SVG_1 = '<svg class="tick" viewBox="0 0 16 11" aria-hidden="true"><path d="M1.5 6l3.2 3.2L11.5 1.8"/></svg>';
+const SVG_2 = '<svg class="tick" viewBox="0 0 18 11" aria-hidden="true"><path d="M1 6l3.2 3.2L11 1.8"/><path d="M7.4 8.8l.4.4L14.6 1.8"/></svg>';
+const SVG_X = '<svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.8v3.6M8 11h.01"/></svg>';
+const TICK = { enviado: SVG_1, entregado: SVG_2, leido: SVG_2, fallido: SVG_X };
+const tick = estado => raw(`<span data-estado class="ticks ${TICK[estado] ? estado : ''}">${TICK[estado] || ''}</span>`);
+
+const TZ = 'America/Lima';
+const claveDia = v => new Date(v).toLocaleDateString('en-CA', { timeZone: TZ });
+const diasAtras = v => Math.round((new Date(claveDia(Date.now())) - new Date(claveDia(v))) / 864e5);
+const diaSemana = v => new Date(v).toLocaleDateString('es-PE', { timeZone: TZ, weekday: 'long' });
+// Hora de la lista: hoy → 14:05 · ayer → Ayer · esta semana → lunes · antes → 03/11/26
+function horaLista(v) {
+  if (!v) return '';
+  const n = diasAtras(v);
+  if (n <= 0) return fmt.hora(v);
+  if (n === 1) return 'Ayer';
+  if (n < 7) return diaSemana(v);
+  return new Date(v).toLocaleDateString('es-PE', { timeZone: TZ, day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+function diaSep(v) {
+  const n = diasAtras(v);
+  if (n <= 0) return 'Hoy';
+  if (n === 1) return 'Ayer';
+  if (n < 7) { const t = diaSemana(v); return t[0].toUpperCase() + t.slice(1); }
+  return new Date(v).toLocaleDateString('es-PE', { timeZone: TZ, day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 export async function render(el, params) {
   st = { id: params[0] ? +params[0] : null, q: '', filtro: '', convs: [], contacto: null, respuestas: [] };
-  dibujar(el, html`<div class="inbox ${st.id ? 'has-chat' : ''}" data-inbox>
+  dibujar(el, html`<div class="inbox wa ${st.id ? 'has-chat' : ''}" data-inbox>
     <aside class="inbox-list">
-      <div class="inbox-list-head stack sm">
-        <div class="row between"><h2>Bandeja</h2>${can('chat.enviar') ? html`<button class="btn btn-sm btn-primary" data-act="nueva">${icon('plus', 'sm')} Nueva</button>` : ''}</div>
-        <div class="search-global" style="max-width:none">${icon('search', 'sm')}<input class="input" data-q placeholder="Buscar conversación…"></div>
-        <div class="seg"><button class="active" data-act="filtro" data-f="">Todas</button><button data-act="filtro" data-f="no_leidos">No leídas</button></div>
+      <div class="wa-list-head">
+        <h2>Chats</h2>
+        ${can('chat.enviar') ? html`<button class="wa-icon-btn" data-act="nueva" title="Nueva conversación" aria-label="Nueva conversación">${icon('edit')}</button>` : ''}
       </div>
+      <div class="wa-search">${icon('search', 'sm')}<input data-q placeholder="Buscar un chat" aria-label="Buscar conversación"></div>
+      <div class="wa-chips"><button class="active" data-act="filtro" data-f="">Todos</button><button data-act="filtro" data-f="no_leidos">No leídos</button></div>
       <div class="conv-list" data-convs>${cargando()}</div>
     </aside>
     <section class="chat" data-chat>${vacioChat()}</section></div>`);
@@ -31,6 +58,7 @@ export async function render(el, params) {
     respuesta: b => insertar(el, st.respuestas.find(r => r.id === +b.dataset.id)?.texto || ''),
     'gestionar-respuestas': () => gestionarRespuestas(el),
     'menu-respuestas': () => toggleRespuestas(el),
+    abajo: () => { const c = $('[data-msgs]', el); c?.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }); },
   });
 
   subs.push(bus.on('chat:mensaje', m => {
@@ -42,27 +70,36 @@ export async function render(el, params) {
   }));
   subs.push(bus.on('chat:estado', s => {
     const b = $(`[data-wa="${CSS.escape(s.wa_id)}"] [data-estado]`, el);
-    if (b) { b.textContent = CHECK[s.estado] || ''; b.classList.toggle('read', s.estado === 'leido'); if (s.estado === 'fallido') b.closest('.bubble').classList.add('failed'); }
+    if (b) { b.className = `ticks ${s.estado}`; b.innerHTML = TICK[s.estado] || ''; if (s.estado === 'fallido') b.closest('.bubble').classList.add('failed'); }
   }));
 
   await cargarLista(el);
   if (st.id) abrirChat(el);
 }
 
-const vacioChat = () => html`<div style="margin:auto">${vacio({ icono: 'chat', titulo: 'Selecciona una conversación', texto: 'Los mensajes de WhatsApp de tus contactos aparecen aquí en tiempo real.' })}</div>`;
+const vacioChat = () => html`<div class="wa-intro">
+  <div class="wa-intro-icon">${icon('whatsapp')}</div>
+  <h3>Bandeja de WhatsApp</h3>
+  <p>Selecciona un chat para ver la conversación. Los mensajes de tus contactos llegan aquí en tiempo real.</p>
+  <div class="wa-intro-foot">${icon('lock', 'sm')} Las conversaciones se sincronizan con tu número de WhatsApp</div></div>`;
 
 const cargarListaD = debounce(el => cargarLista(el), 600);
 async function cargarLista(el) {
   try {
     const { rows } = await api.get('/api/chat', { q: st.q, filtro: st.filtro });
     st.convs = rows;
-    dibujar($('[data-convs]', el), rows.length ? html`${rows.map(c => html`<a class="conv ${c.id === st.id ? 'active' : ''}" href="#/bandeja/${c.id}" data-act="conv" data-id="${c.id}">
-      ${avatar(c.nombre)}
-      <div class="grow"><div class="row between"><span class="conv-name truncate">${c.nombre}</span><span class="xs muted nowrap">${fmt.relativo(c.ultimo_msg)}</span></div>
-      <div class="row"><span class="conv-last truncate grow">${c.ultima_direccion === 'saliente' ? '↩ ' : ''}${c.ultimo_texto || ''}</span>
-      ${c.no_leidos ? html`<span class="unread">${c.no_leidos}</span>` : ''}</div>
-      <div class="row xs muted" style="margin-top:2px">${c.ventana_abierta && c.proveedor !== 'baileys' ? html`<span class="dot ok" style="width:6px;height:6px"></span> Ventana abierta` : ''}${c.asignado_nombre ? html` · ${c.asignado_nombre}` : ''}</div></div></a>`)}`
-      : vacio({ icono: 'chat', titulo: st.q || st.filtro ? 'Sin resultados' : 'Aún no hay conversaciones', texto: st.q || st.filtro ? '' : 'Cuando un contacto te escriba o le envíes una campaña, aparecerá aquí.' }));
+    dibujar($('[data-convs]', el), rows.length ? html`${rows.map(c => {
+      const ventana = c.ventana_abierta && c.proveedor !== 'baileys';
+      return html`<a class="conv ${c.id === st.id ? 'active' : ''} ${c.no_leidos ? 'unread-row' : ''}" href="#/bandeja/${c.id}" data-act="conv" data-id="${c.id}">
+      ${avatar(c.nombre, 'lg')}
+      <div class="conv-main">
+        <div class="conv-top"><span class="conv-name truncate">${c.nombre}</span><span class="conv-time">${horaLista(c.ultimo_msg)}</span></div>
+        <div class="conv-bottom"><span class="conv-last truncate">${c.ultima_direccion === 'saliente' ? tick(c.ultimo_estado) : ''}${c.ultimo_texto || ''}</span>
+          ${c.no_leidos ? html`<span class="unread">${c.no_leidos}</span>` : ''}</div>
+        ${ventana || c.asignado_nombre ? html`<div class="conv-tags">${ventana ? html`<span class="wa-tag ok">Ventana abierta</span>` : ''}${c.asignado_nombre ? html`<span class="wa-tag">${icon('user', 'sm')} ${c.asignado_nombre}</span>` : ''}</div>` : ''}
+      </div></a>`;
+    })}`
+      : html`<div class="wa-list-empty">${vacio({ icono: 'chat', titulo: st.q || st.filtro ? 'Sin resultados' : 'Aún no hay conversaciones', texto: st.q || st.filtro ? '' : 'Cuando un contacto te escriba o le envíes una campaña, aparecerá aquí.' })}</div>`);
   } catch (e) { toastError(e); }
 }
 
@@ -76,77 +113,89 @@ async function abrirChat(el) {
     const c = r.contacto;
     dibujar(chat, html`
       <header class="chat-head">
-        <button class="icon-btn chat-back" data-act="volver" aria-label="Volver">${icon('chevronLeft')}</button>
-        ${avatar(c.nombre)}
-        <div class="grow"><div class="strong truncate">${c.nombre}</div><div class="xs muted">${c.whatsapp || c.telefono_int || c.telefono || 'Sin número'}${c.asignado_nombre ? ` · ${c.asignado_nombre}` : ''}</div></div>
+        <button class="wa-icon-btn chat-back" data-act="volver" aria-label="Volver">${icon('chevronLeft')}</button>
+        <button class="chat-who" data-act="ficha" title="Ver ficha del contacto">
+          ${avatar(c.nombre, 'lg')}
+          <span class="chat-who-text"><span class="chat-who-name truncate">${c.nombre}</span>
+          <span class="chat-who-sub truncate">${c.whatsapp || c.telefono_int || c.telefono || 'Sin número'}${c.asignado_nombre ? ` · ${c.asignado_nombre}` : ''}</span></span>
+        </button>
         <span class="hide-mobile">${etapaBadge(c.estado_crm)}</span>
-        <button class="btn btn-sm" data-act="ficha">${icon('user', 'sm')} Ficha</button>
+        <button class="wa-icon-btn" data-act="ficha" title="Ficha del contacto" aria-label="Ficha del contacto">${icon('user')}</button>
       </header>
-      <div class="chat-body" data-msgs></div>
+      <div class="chat-wrap">
+        <div class="chat-body" data-msgs></div>
+        <button class="wa-fab hidden" data-act="abajo" aria-label="Ir al último mensaje">${icon('chevronDown')}</button>
+      </div>
       <div data-composer></div>`);
     const cont = $('[data-msgs]', chat);
-    if (!r.msgs.length) dibujar(cont, html`<div style="margin:auto">${vacio({ icono: 'whatsapp', titulo: 'Sin mensajes todavía', texto: 'Inicia la conversación con una plantilla aprobada por Meta.' })}</div>`);
-    else { let dia = null; r.msgs.forEach(m => { dia = agregarBurbuja(el, m, dia, false); }); }
+    const fab = $('.wa-fab', chat);
+    cont.addEventListener('scroll', () => fab.classList.toggle('hidden', cont.scrollHeight - cont.scrollTop - cont.clientHeight < 240), { passive: true });
+    if (!r.msgs.length) dibujar(cont, html`<div class="wa-sys">${icon('lock', 'sm')} Aún no hay mensajes. ${c.proveedor === 'baileys' ? 'Escribe el primero abajo.' : 'Inicia la conversación con una plantilla aprobada por Meta.'}</div>`);
+    else r.msgs.forEach(m => agregarBurbuja(el, m, false));
     cont.scrollTop = cont.scrollHeight;
     pintarComposer(el);
     cargarLista(el);
   } catch (e) { toastError(e); dibujar(chat, vacioChat()); }
 }
 
-function burbuja(m) {
+function burbuja(m, inicioGrupo) {
   const out = m.direccion === 'saliente';
   const img = m.media_url && /\.(jpe?g|png|webp)$/i.test(m.media_url);
-  return html`<div class="bubble ${out ? 'out' : 'in'} ${m.estado_entrega === 'fallido' ? 'failed' : ''}" data-wa="${m.wa_id || ''}" title="${m.error_msg || ''}">
+  const soloImg = img && !m.contenido;
+  return html`<div class="bubble ${out ? 'out' : 'in'} ${inicioGrupo ? 'tail' : ''} ${img ? 'has-img' : ''} ${soloImg ? 'only-img' : ''} ${m.estado_entrega === 'fallido' ? 'failed' : ''}" data-wa="${m.wa_id || ''}" title="${m.error_msg || ''}">
+    ${out && inicioGrupo && m.usuario_nombre ? html`<div class="bubble-author">${m.usuario_nombre}</div>` : ''}
     ${m.tipo === 'plantilla' ? html`<div class="bubble-tpl">${icon('template', 'sm')} Plantilla</div>` : ''}
-    ${img ? html`<a href="${m.media_url}" target="_blank" rel="noopener"><img src="${m.media_url}" alt="Imagen" loading="lazy"></a>` : ''}
-    ${m.media_url && !img ? html`<a href="${m.media_url}" target="_blank" rel="noopener">${icon('paperclip', 'sm')} Archivo</a><br>` : ''}
-    ${m.contenido || ''}
-    <div class="bubble-meta">${out && m.usuario_nombre ? html`<span>${m.usuario_nombre} ·</span>` : ''}<span>${fmt.hora(m.created_at)}</span>
-      ${out ? html`<span data-estado class="${m.estado_entrega === 'leido' ? 'read' : ''}">${CHECK[m.estado_entrega] || ''}</span>` : ''}</div>
-    ${m.estado_entrega === 'fallido' && m.error_msg ? html`<div class="xs" style="color:var(--danger)">${m.error_msg}</div>` : ''}</div>`;
+    ${img ? html`<a class="bubble-img" href="${m.media_url}" target="_blank" rel="noopener"><img src="${m.media_url}" alt="Imagen" loading="lazy"></a>` : ''}
+    ${m.media_url && !img ? html`<a class="bubble-file" href="${m.media_url}" target="_blank" rel="noopener">${icon('paperclip', 'sm')} <span>Abrir archivo</span></a>` : ''}
+    ${m.contenido ? html`<span class="bubble-text ${out ? 'sp-out' : 'sp-in'}">${m.contenido}</span>` : ''}
+    <span class="bubble-meta"><span>${fmt.hora(m.created_at)}</span>${out ? tick(m.estado_entrega) : ''}</span>
+    ${m.estado_entrega === 'fallido' && m.error_msg ? html`<div class="bubble-error">${m.error_msg}</div>` : ''}</div>`;
 }
 
-function agregarBurbuja(el, m, diaPrevio, scroll = true) {
+// Agrupa mensajes seguidos del mismo lado (como WhatsApp: la "colita" solo en el primero)
+function agregarBurbuja(el, m, scroll = true) {
   const cont = $('[data-msgs]', el);
-  if (!cont) return diaPrevio;
-  if (cont.querySelector('.empty')) cont.innerHTML = '';
-  const dia = new Date(m.created_at).toDateString();
-  const ultimoDia = diaPrevio ?? cont.dataset.dia;
-  if (dia !== ultimoDia) cont.insertAdjacentHTML('beforeend', String(html`<div class="day-sep">${fmt.dia(m.created_at)}</div>`));
-  cont.dataset.dia = dia;
-  cont.insertAdjacentHTML('beforeend', String(burbuja(m)));
-  if (scroll) cont.scrollTop = cont.scrollHeight;
-  return dia;
+  if (!cont) return;
+  const pegado = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 120;
+  cont.querySelector('.wa-sys')?.remove();
+  const dia = claveDia(m.created_at);
+  const t = new Date(m.created_at).getTime();
+  let nuevoGrupo = cont.dataset.lado !== m.direccion || Math.abs(t - Number(cont.dataset.t || 0)) > 10 * 60e3;
+  if (dia !== cont.dataset.dia) { cont.insertAdjacentHTML('beforeend', String(html`<div class="day-sep"><span>${diaSep(m.created_at)}</span></div>`)); nuevoGrupo = true; }
+  Object.assign(cont.dataset, { dia, lado: m.direccion, t });
+  cont.insertAdjacentHTML('beforeend', String(burbuja(m, nuevoGrupo)));
+  if (scroll && (pegado || m.direccion === 'saliente')) cont.scrollTop = cont.scrollHeight;
 }
 
 function pintarComposer(el) {
   const box = $('[data-composer]', el);
   if (!box) return;
   const c = st.contacto;
-  if (!can('chat.enviar')) { dibujar(box, html`<div class="window-banner muted">${icon('lock', 'sm')} Tu rol solo permite ver conversaciones.</div>`); return; }
+  if (!can('chat.enviar')) { dibujar(box, html`<div class="composer wa-composer-note">${icon('lock', 'sm')} Tu rol solo permite ver conversaciones.</div>`); return; }
   if (!c.ventana_abierta) {
-    dibujar(box, html`<div class="composer"><div class="alert info" style="margin-bottom:10px">${icon('clock', 'sm')}<div>
-      <b>Ventana de 24 h cerrada.</b> WhatsApp solo permite escribir libremente hasta 24 h después del último mensaje del cliente. Para retomar la conversación usa una plantilla aprobada.</div></div>
-      <button class="btn btn-primary" data-act="plantilla">${icon('template', 'sm')} Enviar plantilla</button></div>`);
+    dibujar(box, html`<div class="composer wa-closed">
+      <div class="wa-closed-text">${icon('clock', 'sm')}<span><b>Ventana de 24 h cerrada.</b> WhatsApp solo permite escribir libremente hasta 24 h después del último mensaje del cliente. Para retomar la conversación usa una plantilla aprobada.</span></div>
+      <button class="btn btn-primary wa-btn" data-act="plantilla">${icon('template', 'sm')} Enviar plantilla</button></div>`);
     return;
   }
   const qr = c.proveedor === 'baileys';
   const restante = 24 * 3600e3 - (Date.now() - new Date(c.ultimo_entrante_at).getTime());
+  const aviso = qr ? (c.no_contactar ? 'Este contacto pidió no recibir campañas' : '')
+    : `Ventana abierta · quedan ${Math.max(0, Math.floor(restante / 3600e3))} h ${Math.max(0, Math.floor((restante % 3600e3) / 60e3))} min`;
   dibujar(box, html`<div class="composer">
-    ${qr ? html`<div class="xs muted" style="margin-bottom:6px">${icon('whatsapp', 'sm')} WhatsApp QR · escritura libre${c.no_contactar ? ' · este contacto pidió no recibir campañas' : ''}</div>`
-      : html`<div class="xs muted" style="margin-bottom:6px">${icon('clock', 'sm')} Ventana abierta · quedan ${Math.max(0, Math.floor(restante / 3600e3))} h ${Math.max(0, Math.floor((restante % 3600e3) / 60e3))} min</div>`}
-    <form class="row" data-form style="position:relative;align-items:flex-end">
+    ${aviso ? html`<div class="wa-composer-hint">${icon(qr ? 'alert' : 'clock', 'sm')} ${aviso}</div>` : ''}
+    <form class="wa-form" data-form>
       <div class="quick-menu hidden" data-quick></div>
-      <button type="button" class="btn btn-ghost btn-icon" data-act="menu-respuestas" title="Respuestas rápidas (escribe /)">${icon('zap')}</button>
-      <button type="button" class="btn btn-ghost btn-icon" data-act="imagen" title="Enviar imagen">${icon('image')}</button>
-      ${qr ? '' : html`<button type="button" class="btn btn-ghost btn-icon" data-act="plantilla" title="Plantilla">${icon('template')}</button>`}
+      <button type="button" class="wa-icon-btn" data-act="menu-respuestas" title="Respuestas rápidas (escribe /)" aria-label="Respuestas rápidas">${icon('zap')}</button>
+      <button type="button" class="wa-icon-btn" data-act="imagen" title="Adjuntar imagen" aria-label="Adjuntar imagen">${icon('paperclip')}</button>
+      ${qr ? '' : html`<button type="button" class="wa-icon-btn" data-act="plantilla" title="Plantilla" aria-label="Plantilla">${icon('template')}</button>`}
       <input type="file" accept="image/jpeg,image/png,image/webp" data-file hidden>
-      <textarea class="input grow" name="texto" rows="1" placeholder="Escribe un mensaje… (Enter envía · Shift+Enter nueva línea · / respuestas rápidas)" maxlength="4096"></textarea>
-      <button class="btn btn-success btn-icon" type="submit" aria-label="Enviar" style="height:44px;width:44px">${icon('send')}</button>
+      <div class="wa-input"><textarea name="texto" rows="1" placeholder="Escribe un mensaje" title="Enter envía · Shift+Enter nueva línea · / respuestas rápidas" maxlength="4096"></textarea></div>
+      <button class="wa-send" type="submit" aria-label="Enviar">${icon('send')}</button>
     </form></div>`);
   const form = $('[data-form]', box), ta = form.texto;
   ta.focus();
-  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; };
+  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; };
   ta.addEventListener('input', () => {
     autosize();
     if (ta.value.startsWith('/')) toggleRespuestas(el, ta.value.slice(1));
@@ -169,7 +218,7 @@ function pintarComposer(el) {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
     const fd = new FormData(); fd.append('imagen', f); fd.append('texto', ta.value.trim());
-    try { const r = await api.form('POST', `/api/chat/${st.id}/imagen`, fd); ta.value = ''; agregarBurbuja(el, r.msg); toast('Imagen enviada'); }
+    try { const r = await api.form('POST', `/api/chat/${st.id}/imagen`, fd); ta.value = ''; autosize(); agregarBurbuja(el, r.msg); toast('Imagen enviada'); }
     catch (ex) { toastError(ex); }
   });
 }
