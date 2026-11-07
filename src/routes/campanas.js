@@ -60,14 +60,49 @@ function audienciaSQL(req, filtros = {}) {
   } else {
     ({ where, vals } = filtroContactos({ ...filtros, wa: filtros.wa || 'aptos' }, req));
   }
-  return { where: `${where} AND COALESCE(n.wa_verificado, 1) = 1`, vals };
+  return { where: `${where} AND COALESCE(n.wa_verificado, 1) = 1 AND COALESCE(n.no_contactar, 0) = 0`, vals };
 }
 
 router.post('/audiencia', requirePerm('envios.ejecutar', 'campanas.gestionar'), ah(async (req, res) => {
   const { where, vals } = audienciaSQL(req, req.body.filtros || {});
   const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM negocios n WHERE ${where}`, vals);
   const [muestra] = await db.query(`SELECT n.id, n.nombre, n.contacto_nombre, n.distrito, n.rubro_busqueda FROM negocios n WHERE ${where} ORDER BY n.id LIMIT 5`, vals);
-  res.json({ ok: true, total, muestra, limite_diario: await config.getInt('limite_diario'), hoy: await queue.enviadosHoy() });
+  const lim = await queue.limites();
+  res.json({ ok: true, total, muestra, limite_diario: lim.dia, limites: lim, hoy: await queue.enviadosHoy() });
+}));
+
+// Campaña de texto libre (solo WhatsApp QR): [dato] del contacto y variaciones {a|b|c}
+async function crearCampanaTexto(req, b, { nombre, filtros, programada, destino }) {
+  if ((await require('../wa/proveedor').activo()) !== 'baileys')
+    throw new HttpError(422, 'Las campañas de texto libre solo funcionan con WhatsApp QR. Con la API de Meta usa una plantilla aprobada.');
+  const mensaje = texto(b.mensaje, 4096);
+  if (!mensaje) throw new HttpError(422, 'Escribe el mensaje de la campaña.');
+  const desconocidos = [...mensaje.matchAll(/\[([a-z_]{1,30})\]/gi)].map(m => m[1].toLowerCase()).filter(k => !(k in VARIABLES));
+  if (desconocidos.length) throw new HttpError(422, `Estos datos no existen: ${[...new Set(desconocidos)].map(k => `[${k}]`).join(', ')}.`);
+  if ((/\{[^{}]*$/.test(mensaje) || /^[^{}]*\}/.test(mensaje.replace(/\{[^{}]*\}/g, ''))))
+    throw new HttpError(422, 'Hay una llave { } sin cerrar en las variaciones.');
+  // Mensajes idénticos para todos son la señal más fuerte de spam
+  if (await config.getBool('ab_exigir_variacion') && !/\[[a-z_]+\]|\{\{\s*\w+\s*\}\}|\{[^{}]*\|[^{}]*\}/i.test(mensaje))
+    throw new HttpError(422, 'Para reducir el riesgo de bloqueo, el mensaje debe variar entre contactos: usa un dato como [nombre] o variaciones como {Hola|Buenas|Qué tal}.');
+
+  const estado = programada ? 'programada' : (b.iniciar === '1' && req.user.can('envios.ejecutar') ? 'enviando' : 'borrador');
+  const [r] = await db.query('INSERT INTO campanas SET ?', [{
+    nombre, mensaje, tipo: 'texto', estado, programada_at: programada,
+    iniciada_at: estado === 'enviando' ? new Date() : null,
+    imagen_url: req.file ? `/uploads/${req.file.filename}` : null,
+    filtros: JSON.stringify(filtros), etapa_destino: destino, creado_por: req.user.id, contactos_cargados: 0,
+  }]);
+  await audit(req, 'campana_creada', { entidad: 'campana', entidadId: r.insertId, detalle: { nombre, tipo: 'texto', estado } });
+  emitir('campana:estado', { id: r.insertId, estado });
+  return { id: r.insertId, estado };
+}
+
+// Vista previa de un mensaje de texto con un contacto de ejemplo (resuelve datos y variaciones)
+router.post('/vista-previa', requirePerm('campanas.ver'), ah(async (req, res) => {
+  const [[n]] = await db.query('SELECT n.*, u.nombre AS asignado_nombre FROM negocios n LEFT JOIN usuarios u ON u.id = n.asignado_a ORDER BY n.id DESC LIMIT 1');
+  const ejemplo = n || { nombre: 'Ferretería San Martín', contacto_nombre: 'María', distrito: 'Miraflores', provincia: 'Lima', departamento: 'Lima', rubro_busqueda: 'ferreterías' };
+  const m = String(req.body.mensaje || '').slice(0, 4096);
+  res.json({ ok: true, ejemplos: [0, 1, 2].map(() => queue.textoCampana(m, ejemplo)), contacto: ejemplo.nombre });
 }));
 
 // body (multipart): nombre, plantilla 'nombre|idioma', variables JSON [{tipo:'dato'|'fijo', valor}],
@@ -86,6 +121,14 @@ router.post('/', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(
     programada = new Date(b.programada_at);
     if (Number.isNaN(programada.getTime())) throw new HttpError(422, 'Fecha de programación inválida.');
     if (programada < new Date(Date.now() - 5 * 60000)) throw new HttpError(422, 'La fecha programada ya pasó.');
+  }
+
+  if (b.tipo === 'texto') {
+    const destinoTxt = b.etapa_destino && b.etapa_destino !== 'sin_cambio' ? String(b.etapa_destino) : null;
+    if (destinoTxt) { const [[e]] = await db.query('SELECT clave FROM etapas WHERE clave = ?', [destinoTxt]); if (!e) throw new HttpError(422, 'Etapa de destino inválida.'); }
+    filtros.maximo = entero(filtros.maximo, 5000, 1, 20000);
+    const r = await crearCampanaTexto(req, b, { nombre, filtros, programada, destino: destinoTxt });
+    return res.status(201).json({ ok: true, ...r });
   }
 
   const [pNombre, pIdioma] = String(b.plantilla || '').split('|');
@@ -169,9 +212,13 @@ router.post('/:id/:accion', requirePerm('envios.ejecutar'), ah(async (req, res) 
   if (!a) throw new HttpError(404, 'Acción no válida.');
   const [[c]] = await db.query('SELECT id, estado, tipo FROM campanas WHERE id = ?', [req.params.id]);
   if (!c) throw new HttpError(404, 'Campaña no encontrada.');
-  if (c.tipo === 'texto') throw new HttpError(422, 'Esta campaña es del sistema anterior (texto libre) y solo queda como historial. Crea una nueva con una plantilla aprobada.');
   if (!a.desde.includes(c.estado)) throw new HttpError(422, `No se puede ${req.params.accion} una campaña ${c.estado}.`);
-  if (['iniciar', 'reanudar'].includes(req.params.accion)) await meta.credenciales();
+  if (['iniciar', 'reanudar'].includes(req.params.accion)) {
+    const P = require('../wa/proveedor');
+    if (c.tipo === 'texto' && (await P.activo()) !== 'baileys')
+      throw new HttpError(422, 'Esta campaña es de texto libre y solo se envía con WhatsApp QR. Cambia el proveedor en Configuración → WhatsApp.');
+    if (!(await P.conectado())) throw new HttpError(409, 'WhatsApp no está conectado. Ve a WhatsApp → Conexión.');
+  }
   await db.query(`UPDATE campanas SET ${a.sql} WHERE id = ?`, [c.id]);
   if (req.params.accion === 'cancelar')
     await db.query("UPDATE envios SET estado = 'cancelado', reserva = NULL, error_msg = ? WHERE campana_id = ? AND estado IN ('pendiente','procesando')",

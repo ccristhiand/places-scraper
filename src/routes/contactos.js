@@ -19,7 +19,7 @@ const ORDEN = { nombre: 'n.nombre', rating: 'n.rating', created_at: 'n.created_a
 const SELECT = `SELECT n.id, n.nombre, n.contacto_nombre, n.telefono, n.telefono_int, n.whatsapp, n.email, n.website,
   n.direccion, n.rating, n.resenas, n.departamento, n.provincia, n.distrito, n.rubro_busqueda, n.estado_crm,
   n.valor_estimado, n.asignado_a, u.nombre AS asignado_nombre, n.etiquetas, n.origen, n.wa_verificado,
-  n.ultimo_entrante_at, n.ultima_actividad_at, n.created_at
+  n.ultimo_entrante_at, n.ultima_actividad_at, n.created_at, n.no_contactar
   FROM negocios n LEFT JOIN usuarios u ON u.id = n.asignado_a`;
 
 // ── Listado ───────────────────────────────────────────────────────────────
@@ -253,6 +253,19 @@ router.put('/:id', requirePerm('contactos.editar'), ah(async (req, res) => {
   }
   if (!Object.keys(c).length) return res.json({ ok: true });
   await db.query('UPDATE negocios SET ? WHERE id = ?', [c, id]);
+  res.json({ ok: true });
+}));
+
+// Baja de campañas (manual o reactivar a quien vuelve a estar interesado)
+router.patch('/:id/baja', requirePerm('contactos.editar'), ah(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  await asegurarAcceso(req, id);
+  const baja = req.body.no_contactar === true || req.body.no_contactar === 1 || req.body.no_contactar === '1';
+  await db.query('UPDATE negocios SET no_contactar = ?, no_contactar_at = ? WHERE id = ?', [baja ? 1 : 0, baja ? new Date() : null, id]);
+  if (baja) await db.query("UPDATE envios SET estado = 'cancelado', reserva = NULL, error_msg = 'Dado de baja manualmente' WHERE negocio_id = ? AND estado IN ('pendiente','procesando')", [id]);
+  await db.query('INSERT INTO crm_historial (negocio_id, tipo, contenido, usuario, usuario_id) VALUES (?,?,?,?,?)',
+    [id, 'sistema', baja ? 'Marcado como "no contactar": excluido de las campañas' : 'Reactivado para recibir campañas', req.user.nombre, req.user.id]);
+  await audit(req, baja ? 'contacto_baja' : 'contacto_reactivado', { entidad: 'contacto', entidadId: id });
   res.json({ ok: true });
 }));
 

@@ -1,5 +1,8 @@
-// WhatsApp (API oficial de Meta): conexión con Embedded Signup, plantillas, recordatorios y consumo
-import { html, raw, icon, api, render as dibujar, acciones, fmt, can, vacio, toast, toastError, confirmar, $, $$, cargando, modal, formModal, conCarga, session, esc } from '../core.js';
+// WhatsApp: conexión (API de Meta con Embedded Signup, o WhatsApp Web por QR), plantillas, recordatorios y consumo
+import { html, raw, icon, api, render as dibujar, acciones, fmt, can, vacio, toast, toastError, confirmar, $, $$, cargando, modal, formModal, conCarga, session, esc, bus } from '../core.js';
+
+let subs = [];
+export function destroy() { subs.forEach(f => f()); subs = []; }
 
 const TABS = [['conexion', 'Conexión', 'link'], ['plantillas', 'Plantillas', 'template'], ['recordatorios', 'Recordatorios', 'clock'], ['consumo', 'Consumo', 'chart']];
 const ESTADO_PL = {
@@ -16,10 +19,13 @@ let st;
 export async function render(el, params) {
   st = { tab: TABS.some(t => t[0] === params[0]) ? params[0] : 'conexion', estado: null };
   dibujar(el, html`
-    <div class="page-head"><div><h1>WhatsApp</h1><p>Conexión con la API oficial de Meta, plantillas de mensajes y consumo.</p></div></div>
+    <div class="page-head"><div><h1>WhatsApp</h1><p data-sub>Conexión, plantillas de mensajes y consumo.</p></div>
+      ${can('config.ver') ? html`<div class="actions"><a class="btn" href="#/config/meta">${icon('settings', 'sm')} Cambiar proveedor</a></div>` : ''}</div>
     <div class="tabs">${TABS.map(([k, t, i]) => html`<a class="tab ${st.tab === k ? 'active' : ''}" href="#/whatsapp/${k}">${icon(i, 'sm')} ${t}</a>`)}</div>
     <div data-cont>${cargando()}</div>`);
   acciones(el, ACCIONES(el));
+  // Estado de WhatsApp QR en vivo (QR nuevo, conectado, desconectado…)
+  subs.push(bus.on('baileys:estado', () => { if (st.tab === 'conexion' && st.estado?.proveedor === 'baileys') pintar(el); }));
   await pintar(el);
 }
 
@@ -27,6 +33,17 @@ async function pintar(el) {
   const cont = $('[data-cont]', el);
   try {
     st.estado = await api.get('/api/whatsapp/estado');
+    const qr = st.estado.proveedor === 'baileys';
+    $('[data-sub]', el).textContent = qr ? 'Proveedor activo: WhatsApp QR (WhatsApp Web).' : 'Proveedor activo: API oficial de Meta.';
+    if (qr) {
+      st.qr = (await api.get('/api/whatsapp/qr/estado')).qr;
+      session.meta = st.qr.estado === 'conectado';
+      if (st.tab === 'conexion') return conexionQR(cont);
+      if (st.tab === 'plantillas') return dibujar(cont, html`<div class="card">${vacio({ icono: 'template', titulo: 'Con WhatsApp QR no se usan plantillas',
+        texto: 'Las campañas se escriben como texto libre (con datos del contacto y variaciones) y los avisos automáticos se envían como mensajes normales. Las plantillas de Meta vuelven a usarse si cambias el proveedor.' })}</div>`);
+      if (st.tab === 'recordatorios') return recordatoriosQR(cont);
+      if (st.tab === 'consumo') return consumo(cont);
+    }
     session.meta = st.estado.cuenta.estado === 'conectado';
     if (st.tab === 'conexion') return conexion(cont);
     if (st.estado.cuenta.estado !== 'conectado')
@@ -36,6 +53,72 @@ async function pintar(el) {
     if (st.tab === 'recordatorios') return recordatorios(cont);
     if (st.tab === 'consumo') return consumo(cont);
   } catch (e) { toastError(e); dibujar(cont, ''); }
+}
+
+// ── Conexión por QR (WhatsApp Web) ─────────────────────────────────────────
+function conexionQR(cont) {
+  const q = st.qr, editable = can('config.editar');
+  const lim = q.limites || {}, cal = lim.calentamiento;
+  const ESTADO = { conectado: ['success', 'Conectado'], conectando: ['warning', 'Conectando…'], qr: ['info', 'Esperando escaneo'], codigo: ['info', 'Esperando código'],
+    desconectado: ['', 'Sin conectar'], bloqueado: ['danger', 'Rechazado por WhatsApp'] };
+  const [tone, txt] = ESTADO[q.estado] || ['', q.estado];
+  const barra = (valor, max) => html`<div class="progress" style="margin-top:5px"><div style="width:${raw(Math.min(100, (valor / Math.max(1, max)) * 100))}%;background:${raw(valor >= max ? 'var(--warning)' : 'var(--primary)')}"></div></div>`;
+  const pausaLote = q.lote?.pausaHasta && q.lote.pausaHasta > Date.now();
+
+  let cuerpo;
+  if (q.estado === 'conectado') {
+    cuerpo = html`<div class="row" style="gap:14px"><div class="kpi-icon" style="width:44px;height:44px;color:var(--success)">${icon('whatsapp', 'lg')}</div>
+        <div><div class="kpi-value" style="font-size:19px;margin:0">+${q.numero}</div><div class="small muted">${q.nombre || ''}${q.conectadoAt ? ` · conectado ${fmt.relativo(q.conectadoAt)}` : ''}</div></div></div>
+      ${editable ? html`<div class="row wrap mt">
+        <button class="btn" data-act="qr-pausar">${icon('pause', 'sm')} Pausar conexión</button>
+        <button class="btn btn-danger right" data-act="qr-cerrar">Desvincular número</button></div>
+        <p class="xs muted mt">"Pausar" desconecta el CRM pero conserva la sesión (vuelves sin escanear). "Desvincular" la cierra también en el celular.</p>` : ''}`;
+  } else if (q.estado === 'qr' && q.qr) {
+    cuerpo = html`<div class="row top wrap" style="gap:20px"><img src="${q.qr}" alt="Código QR de WhatsApp" style="width:240px;height:240px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px">
+      <ol class="small" style="margin:0;padding-left:18px;line-height:1.9"><li>Abre <b>WhatsApp</b> en el celular del número de la empresa.</li><li>Toca <b>⋮ / Configuración → Dispositivos vinculados</b>.</li>
+        <li>Toca <b>Vincular un dispositivo</b> y escanea este código.</li><li class="muted">El código se renueva solo cada pocos segundos.</li></ol></div>`;
+  } else if (q.estado === 'codigo' && q.codigo) {
+    cuerpo = html`<p class="small muted">En el celular: <b>Dispositivos vinculados → Vincular un dispositivo → Vincular con el número de teléfono</b>, y escribe:</p>
+      <div class="kpi-value mono" style="font-size:32px;letter-spacing:.15em;margin:12px 0">${q.codigo}</div>`;
+  } else if (q.estado === 'conectando') {
+    cuerpo = html`<div class="loading" style="padding:20px 0"><span class="spinner"></span>Conectando con WhatsApp…</div>`;
+  } else {
+    cuerpo = html`<p class="muted small mb">Vincula el número de la empresa como un dispositivo de WhatsApp Web. El celular debe mantenerse con internet.</p>
+      ${editable ? html`<div class="row wrap"><button class="btn btn-primary" data-act="qr-conectar">${icon('whatsapp', 'sm')} Conectar con código QR</button>
+        <button class="btn" data-act="qr-codigo">${icon('phone', 'sm')} Vincular con número de teléfono</button></div>` : html`<p class="small muted">Solo un administrador puede vincular el número.</p>`}`;
+  }
+
+  dibujar(cont, html`<div class="grid side">
+    <div class="stack">
+      <div class="card"><div class="card-head"><h3>${icon('whatsapp', 'sm')} WhatsApp QR</h3><span class="badge ${tone}">${txt}</span></div>
+        <div class="card-body">${q.ultimoError ? html`<div class="alert ${q.estado === 'bloqueado' ? 'danger' : 'warning'} small mb">${icon('alert', 'sm')}<div>${q.ultimoError}</div></div>` : ''}${cuerpo}</div></div>
+      <div class="card"><div class="card-head"><h3>${icon('shield', 'sm')} Buenas prácticas para no perder el número</h3></div><div class="card-body small stack sm">
+        <p>• Usa un número con antigüedad, con foto de perfil y nombre de empresa (idealmente WhatsApp Business).</p>
+        <p>• Escribe a contactos relevantes para tu negocio, con mensajes personalizados y siempre con una salida ("responde NO…").</p>
+        <p>• Responde a quien te contesta: las conversaciones de ida y vuelta mejoran la reputación del número.</p>
+        <p>• No uses el mismo número en otro WhatsApp Web ni en otro sistema de envíos a la vez.</p>
+        <p>• Si recibes un aviso de bloqueo temporal, detén los envíos y espera al menos 24–48 h antes de reanudar con límites más bajos.</p>
+      </div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="card-head"><h3>${icon('clock', 'sm')} Envíos de hoy</h3>${can('config.ver') ? html`<a class="small" href="#/config/antiban">Antibaneo</a>` : ''}</div><div class="card-body stack sm small">
+        <div><div class="row between"><span class="muted">Hoy</span><b>${q.enviados_hoy} / ${lim.dia}</b></div>${barra(q.enviados_hoy, lim.dia)}</div>
+        ${lim.hora ? html`<div><div class="row between"><span class="muted">Última hora</span><b>${q.enviados_hora} / ${lim.hora}</b></div>${barra(q.enviados_hora, lim.hora)}</div>` : ''}
+        ${pausaLote ? html`<div class="alert info">${icon('pause', 'sm')}<div>Descanso entre lotes hasta las ${fmt.hora(q.lote.pausaHasta)}.</div></div>` : ''}
+        ${cal ? html`<div class="divider" style="margin:6px 0"></div><div class="row between"><span class="muted">Calentamiento</span><b>Día ${cal.dia}</b></div>
+          <div class="xs muted">Hoy hasta ${cal.limite} mensajes${cal.desde ? ` · número vinculado el ${cal.desde}` : ''}.</div>
+          ${editable ? html`<button class="btn btn-sm btn-ghost" data-act="qr-calentamiento" style="align-self:flex-start">Reiniciar calentamiento</button>` : ''}` : ''}
+      </div></div>
+    </div></div>`);
+}
+
+function recordatoriosQR(cont) {
+  return api.get('/api/whatsapp/plantillas-sistema').then(({ rows }) => dibujar(cont, html`
+    <div class="alert info mb">${icon('info')}<div>Con WhatsApp QR estos avisos se envían como mensajes normales con los datos reemplazados: no necesitan aprobación.</div></div>
+    <div class="grid c2">${rows.map(s => html`<div class="card"><div class="card-head"><h3>${s.titulo}</h3></div><div class="card-body stack sm">
+      <p class="small muted">${s.descripcion}</p><div class="bubble out small" style="max-width:100%">${s.texto}</div></div></div>`)}</div>
+    <div class="card mt"><div class="card-body small row wrap">${icon('settings', 'sm')}<span class="grow">Actívalos o desactívalos en Configuración.</span>
+      <a class="btn btn-sm" href="#/config/chat">Recordatorios</a><a class="btn btn-sm" href="#/config/leads">Avisos de leads</a><a class="btn btn-sm" href="#/config/proyectos">Proyectos</a></div></div>`));
 }
 
 // ── Conexión ──────────────────────────────────────────────────────────────
@@ -296,6 +379,26 @@ async function consumo(cont) {
 
 // ── Acciones ──────────────────────────────────────────────────────────────
 const ACCIONES = el => ({
+  // WhatsApp QR
+  'qr-conectar': b => conCarga(b, async () => { try { await api.post('/api/whatsapp/qr/conectar'); pintar(el); } catch (e) { toastError(e); } }),
+  'qr-codigo': () => formModal({
+    title: 'Vincular con número de teléfono', size: 'sm', submit: 'Generar código',
+    subtitle: 'Recibirás un código de 8 caracteres para escribirlo en WhatsApp del celular.',
+    fields: html`<label class="field span-2"><span>Número con código de país</span><input class="input" name="telefono" required inputmode="numeric" placeholder="51987654321"></label>`,
+    onSubmit: async d => { await api.post('/api/whatsapp/qr/conectar', { telefono: d.telefono }); setTimeout(() => pintar(el), 3500); },
+  }),
+  'qr-pausar': async () => {
+    if (!(await confirmar('El CRM dejará de enviar y recibir por WhatsApp hasta que vuelvas a conectar. La sesión se conserva.', { titulo: 'Pausar conexión', ok: 'Pausar' }))) return;
+    try { await api.post('/api/whatsapp/qr/desconectar', { cerrar_sesion: false }); toast('Conexión pausada'); pintar(el); } catch (e) { toastError(e); }
+  },
+  'qr-cerrar': async () => {
+    if (!(await confirmar('Se cerrará la sesión en el celular y tendrás que escanear el código QR otra vez.', { titulo: 'Desvincular número', ok: 'Desvincular', peligro: true }))) return;
+    try { await api.post('/api/whatsapp/qr/desconectar', { cerrar_sesion: true }); toast('Número desvinculado'); pintar(el); } catch (e) { toastError(e); }
+  },
+  'qr-calentamiento': async () => {
+    if (!(await confirmar('El límite diario vuelve al del primer día y sube de nuevo cada día. Útil si cambiaste de número o tuviste un bloqueo temporal.', { titulo: 'Reiniciar calentamiento', ok: 'Reiniciar' }))) return;
+    try { await api.post('/api/whatsapp/qr/reiniciar-calentamiento'); toast('Calentamiento reiniciado'); pintar(el); } catch (e) { toastError(e); }
+  },
   conectar: b => conectar(el, b.dataset.modo, b),
   copiar: b => navigator.clipboard?.writeText(b.dataset.v).then(() => toast('Copiado')),
   recargar: () => pintar(el),

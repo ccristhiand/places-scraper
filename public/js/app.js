@@ -41,7 +41,7 @@ function pintarSidebar(actual) {
     <nav class="nav">${items}</nav>
     <div class="sidebar-foot"><a class="wa-pill" href="#/whatsapp/conexion">
       <span class="dot ${session.meta ? 'ok' : 'warn'}"></span>
-      <span>${session.meta ? 'WhatsApp conectado' : 'WhatsApp sin conectar'}</span></a></div>`);
+      <span>${session.proveedor === 'baileys' ? 'WhatsApp QR' : 'WhatsApp'} ${session.meta ? 'conectado' : 'sin conectar'}</span></a></div>`);
 }
 
 function pintarTopbar() {
@@ -171,7 +171,7 @@ async function navegar() {
 (async () => {
   try {
     const me = await api.get('/api/auth/me');
-    Object.assign(session, { user: me.usuario, empresa: me.empresa, moneda: me.moneda, meta: me.meta });
+    Object.assign(session, { user: me.usuario, empresa: me.empresa, moneda: me.moneda, meta: me.meta, proveedor: me.proveedor || 'meta' });
     const tema = me.usuario.tema;
     if (tema === 'oscuro') document.documentElement.dataset.theme = 'dark';
     else if (tema === 'claro') document.documentElement.dataset.theme = 'light';
@@ -183,6 +183,15 @@ async function navegar() {
       s.onAny((ev, data) => bus.emit(ev, data));
     }
     bus.on('notificacion', n => { contarNotificaciones(); toast(n.titulo, 'info'); });
+    // Estado de WhatsApp en el menú lateral (conexión QR en vivo y cambio de proveedor)
+    const refrescarPill = () => pintarSidebar((location.hash.replace(/^#\/?/, '').split('/')[0]) || 'panel');
+    bus.on('baileys:estado', s => {
+      if (session.proveedor !== 'baileys') return;
+      const antes = session.meta;
+      session.meta = s.estado === 'conectado';
+      if (antes !== session.meta) { refrescarPill(); if (!session.meta && s.ultimoError) toast(s.ultimoError, 'warning', 8000); }
+    });
+    bus.on('wa:proveedor', p => { session.proveedor = p.proveedor; api.get('/api/auth/me').then(r => { session.meta = r.meta; refrescarPill(); }).catch(() => {}); });
     bus.on('chat:mensaje', m => { if (m.direccion === 'entrante') contarChat(); });
     bus.on('lead:nuevo', () => contarNotificaciones());
     addEventListener('hashchange', navegar);

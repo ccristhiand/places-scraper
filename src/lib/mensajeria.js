@@ -1,11 +1,11 @@
-// Envío de mensajes a contactos + registro en la bandeja
+// Envío de mensajes a contactos + registro en la bandeja (con el proveedor de WhatsApp activo)
 const path   = require('path');
 const db     = require('../db');
-const meta   = require('../meta');
 const config = require('./config');
 const { emitir } = require('./notificar');
 const { limpiarNumero, HttpError } = require('./utils');
 
+const proveedor = () => require('../wa/proveedor');
 const UPLOADS = path.join(__dirname, '../../uploads');
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
@@ -17,6 +17,16 @@ function ventanaAbierta(negocio) {
 async function numeroDe(negocio) {
   const cp = await config.get('empresa_codigo_pais');
   return limpiarNumero(negocio.whatsapp || negocio.telefono_int || negocio.telefono, cp);
+}
+
+// Destino para enviar: el número; con WhatsApp Web también sirve el identificador @lid guardado
+async function destinoDe(negocio) {
+  const numero = await numeroDe(negocio);
+  if (numero) return { destino: numero, numero };
+  const jid = String(negocio.wa_jid || '');
+  if (jid && !/^\d{8,15}$/.test(jid) && (await proveedor().activo()) === 'baileys') return { destino: `lid:${jid}`, numero: jid };
+  if (/^\d{8,15}$/.test(jid)) return { destino: jid, numero: jid };
+  return { destino: null, numero: null };
 }
 
 // Ruta local segura de una imagen subida (/uploads/xxx)
@@ -38,36 +48,30 @@ async function registrarSaliente({ negocioId, numero, tipo, contenido, mediaUrl 
   return msg;
 }
 
-// opciones: { texto } | { imagenUrl, texto } | { plantilla: { nombre, idioma, params, cuerpo, header } }
-async function enviarAContacto(negocio, opciones, { usuarioId = null, exigirVentana = true, origen = 'manual' } = {}) {
-  const numero = await numeroDe(negocio);
-  if (!numero) throw new HttpError(400, 'El contacto no tiene un número válido.');
+// opciones: { texto } | { imagenUrl, texto } | { plantilla: { nombre, idioma, params, cuerpo, header, headerUrl } }
+// escritura: con WhatsApp Web muestra "escribiendo…" antes de enviar
+async function enviarAContacto(negocio, opciones, { usuarioId = null, exigirVentana = true, origen = 'manual', escritura = true } = {}) {
+  const { destino, numero } = await destinoDe(negocio);
+  if (!destino) throw new HttpError(400, 'El contacto no tiene un número válido.');
+  const P = proveedor();
 
   if (opciones.plantilla) {
     const p = opciones.plantilla;
-    let headerMediaId = null;
-    if (p.header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(p.header)) {
-      const img = rutaUpload(p.headerUrl);
-      if (!img) throw new HttpError(400, `La plantilla "${p.nombre}" requiere una imagen de cabecera.`);
-      headerMediaId = await meta.subirMedia(img.ruta, img.mime);
-    }
-    const r = await meta.enviarPlantilla(numero, p.nombre, p.idioma, p.params || [], { headerMediaId, headerTipo: p.header });
-    const contenido = p.cuerpo ? meta.renderPlantilla(p.cuerpo, p.params || []) : `[Plantilla ${p.nombre}]`;
-    return registrarSaliente({ negocioId: negocio.id, numero, tipo: 'plantilla', contenido, mediaUrl: p.headerUrl || null, waId: r.id, usuarioId, origen });
+    const r = await P.enviarPlantilla(destino, { ...p, imagen: p.headerUrl ? rutaUpload(p.headerUrl) : null }, { escritura });
+    return registrarSaliente({ negocioId: negocio.id, numero, tipo: (await P.activo()) === 'meta' ? 'plantilla' : (p.headerUrl ? 'imagen' : 'texto'),
+      contenido: r.contenido, mediaUrl: p.headerUrl || null, waId: r.id, usuarioId, origen });
   }
 
-  if (exigirVentana && !ventanaAbierta(negocio))
+  if (exigirVentana && (await P.requiereVentana()) && !ventanaAbierta(negocio))
     throw new HttpError(409, 'Pasaron más de 24 h desde el último mensaje del cliente. Usa una plantilla aprobada.', 'VENTANA_CERRADA');
 
   if (opciones.imagenUrl) {
-    const img = rutaUpload(opciones.imagenUrl);
-    const mediaId = await meta.subirMedia(img.ruta, img.mime);
-    const r = await meta.enviarImagen(numero, mediaId, opciones.texto);
+    const r = await P.enviarImagen(destino, rutaUpload(opciones.imagenUrl), opciones.texto, { escritura });
     return registrarSaliente({ negocioId: negocio.id, numero, tipo: 'imagen', contenido: opciones.texto || '', mediaUrl: opciones.imagenUrl, waId: r.id, usuarioId, origen });
   }
 
-  const r = await meta.enviarTexto(numero, opciones.texto);
+  const r = await P.enviarTexto(destino, opciones.texto, { escritura });
   return registrarSaliente({ negocioId: negocio.id, numero, tipo: 'texto', contenido: opciones.texto, waId: r.id, usuarioId, origen });
 }
 
-module.exports = { ventanaAbierta, numeroDe, rutaUpload, enviarAContacto, registrarSaliente, UPLOADS };
+module.exports = { ventanaAbierta, numeroDe, destinoDe, rutaUpload, enviarAContacto, registrarSaliente, UPLOADS };

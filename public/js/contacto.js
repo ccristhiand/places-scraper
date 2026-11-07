@@ -73,6 +73,7 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
         <div class="row between"><span class="muted">Origen</span><span class="badge">${c.origen || 'google'}</span></div>
         <div class="row between"><span class="muted">WhatsApp</span>${c.wa_verificado === 1 ? html`<span class="badge success">Activo</span>` : c.wa_verificado === 0 ? html`<span class="badge danger">Sin WhatsApp</span>` : html`<span class="badge">Sin verificar</span>`}</div>
         <div class="row between"><span class="muted">Ventana 24 h</span>${c.ventana_abierta ? html`<span class="badge success">Abierta</span>` : html`<span class="badge">Cerrada</span>`}</div>
+        <div class="row between"><span class="muted">Campañas</span>${c.no_contactar ? html`<span class="badge warning">Dado de baja</span>` : html`<span class="badge success">Recibe</span>`}</div>
         ${c.rating ? html`<div class="row between"><span class="muted">Google</span><span>${icon('star', 'sm')} ${c.rating} (${c.resenas})</span></div>` : ''}
         <div class="row between"><span class="muted">Creado</span><span>${fmt.fecha(c.created_at)}</span></div>
         <div class="row between"><span class="muted">Última actividad</span><span>${fmt.relativo(c.ultima_actividad_at)}</span></div>
@@ -185,6 +186,11 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
       ...(can('contactos.eliminar') ? [{ label: 'Eliminar contacto', icon: 'trash', danger: true, onClick: async () => {
         if (!(await confirmar(`Se eliminará "${c.nombre}" con todo su historial, mensajes, tareas y reuniones.`, { titulo: 'Eliminar contacto', ok: 'Eliminar', peligro: true }))) return;
         try { await api.del(`/api/contactos/${id}`); toast('Contacto eliminado'); cambiado = true; cerrar(); } catch (e) { toastError(e); }
+      } }] : []),
+      ...(can('contactos.editar') ? [{ label: c.no_contactar ? 'Reactivar para campañas' : 'Dar de baja (no contactar)', icon: c.no_contactar ? 'check' : 'x', onClick: async () => {
+        const baja = !c.no_contactar;
+        if (baja && !(await confirmar(`"${c.nombre}" quedará excluido de todas las campañas y se cancelarán sus envíos pendientes.`, { titulo: 'Dar de baja', ok: 'Dar de baja' }))) return;
+        try { await api.patch(`/api/contactos/${id}/baja`, { no_contactar: baja }); c.no_contactar = baja ? 1 : 0; cambiado = true; toast(baja ? 'Contacto dado de baja' : 'Contacto reactivado'); pintar(); } catch (e) { toastError(e); }
       } }] : []),
       { label: 'Copiar enlace de la ficha', icon: 'copy', onClick: () => navigator.clipboard?.writeText(`${location.origin}/#/contactos/${id}`).then(() => toast('Enlace copiado')) },
     ]),

@@ -6,6 +6,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
       "port": 3010
+    },
+    {
+      "name": "crm-3011",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["src/server.js"],
+      "env": { "PORT": "3011" },
+      "port": 3011
     }
   ]
 }

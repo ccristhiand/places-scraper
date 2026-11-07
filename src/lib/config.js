@@ -10,6 +10,36 @@ const DEFS = {
   empresa_codigo_pais:   { grupo: 'empresa', def: '51', label: 'Código de país por defecto' },
   empresa_moneda:        { grupo: 'empresa', def: 'PEN', label: 'Moneda' },
 
+  // Proveedor activo: solo uno envía. 'meta' = API oficial · 'baileys' = WhatsApp Web por QR
+  wa_proveedor:          { grupo: 'whatsapp', def: 'meta', tipo: 'opcion', opciones: ['meta', 'baileys'], label: 'Proveedor de WhatsApp' },
+
+  // Antibaneo (solo modo QR / Baileys)
+  ab_delay_min_seg:        { grupo: 'antiban', def: '45',  tipo: 'int', min: 5,  max: 3600, label: 'Pausa mínima entre mensajes (segundos)' },
+  ab_delay_max_seg:        { grupo: 'antiban', def: '120', tipo: 'int', min: 5,  max: 7200, label: 'Pausa máxima entre mensajes (segundos)' },
+  ab_lote_tamano:          { grupo: 'antiban', def: '15',  tipo: 'int', min: 1,  max: 500,  label: 'Mensajes por lote' },
+  ab_lote_pausa_min:       { grupo: 'antiban', def: '10',  tipo: 'int', min: 1,  max: 600,  label: 'Descanso mínimo entre lotes (minutos)' },
+  ab_lote_pausa_max:       { grupo: 'antiban', def: '25',  tipo: 'int', min: 1,  max: 1200, label: 'Descanso máximo entre lotes (minutos)' },
+  ab_limite_hora:          { grupo: 'antiban', def: '30',  tipo: 'int', min: 1,  max: 1000, label: 'Máximo de mensajes por hora' },
+  ab_limite_dia:           { grupo: 'antiban', def: '150', tipo: 'int', min: 1,  max: 5000, label: 'Máximo de mensajes por día' },
+  ab_calentamiento_activo: { grupo: 'antiban', def: '1',   tipo: 'bool', label: 'Calentamiento progresivo del número' },
+  ab_calentamiento_inicio: { grupo: 'antiban', def: '20',  tipo: 'int', min: 1,  max: 1000, label: 'Mensajes el primer día' },
+  ab_calentamiento_incremento: { grupo: 'antiban', def: '15', tipo: 'int', min: 0, max: 1000, label: 'Aumento diario' },
+  ab_simular_escritura:    { grupo: 'antiban', def: '1',   tipo: 'bool', label: 'Mostrar "escribiendo…" antes de enviar' },
+  ab_escritura_cps:        { grupo: 'antiban', def: '14',  tipo: 'int', min: 3,  max: 60,   label: 'Velocidad de escritura simulada (caracteres por segundo)' },
+  ab_verificar_numero:     { grupo: 'antiban', def: '1',   tipo: 'bool', label: 'Verificar que el número tenga WhatsApp antes de enviar' },
+  ab_orden_aleatorio:      { grupo: 'antiban', def: '1',   tipo: 'bool', label: 'Enviar a los contactos en orden aleatorio' },
+  ab_dias_entre_campanas:  { grupo: 'antiban', def: '7',   tipo: 'int', min: 0,  max: 365,  label: 'No repetir un contacto en campañas durante (días)' },
+  ab_max_fallos_pct:       { grupo: 'antiban', def: '30',  tipo: 'int', min: 5,  max: 100,  label: 'Pausar si fallan más del (%) de los últimos 20 envíos' },
+  ab_exigir_variacion:     { grupo: 'antiban', def: '1',   tipo: 'bool', label: 'Exigir variaciones {a|b} o datos del contacto en el mensaje' },
+  ab_marcar_leido:         { grupo: 'antiban', def: '1',   tipo: 'bool', label: 'Marcar como leídos los mensajes al abrir la conversación' },
+  ab_en_linea:             { grupo: 'antiban', def: '0',   tipo: 'bool', label: 'Aparecer "en línea" mientras el CRM está conectado' },
+  ab_nombre_dispositivo:   { grupo: 'antiban', def: 'CRM Comercial', label: 'Nombre del dispositivo vinculado' },
+
+  // Bajas: quien pide no recibir más mensajes queda excluido de las campañas (ambos proveedores)
+  optout_activo:           { grupo: 'antiban', def: '1', tipo: 'bool', label: 'Dar de baja a quien responda con una palabra de baja' },
+  optout_palabras:         { grupo: 'antiban', def: 'no,stop,baja,no gracias,no me interesa,no escribir,no molestar,cancelar,eliminar', label: 'Palabras de baja (separadas por coma)' },
+  optout_respuesta:        { grupo: 'antiban', def: 'Entendido, no volveremos a escribirte. ¡Gracias por tu tiempo!', label: 'Respuesta automática al darse de baja (vacío = no responder)' },
+
   // App de Meta (plataforma). El número de la empresa se conecta con Embedded Signup → tabla wa_cuenta
   meta_app_id:           { grupo: 'meta', def: '', label: 'App ID' },
   meta_app_secret:       { grupo: 'meta', def: '', tipo: 'secret', label: 'Clave secreta de la app (App Secret)' },
@@ -91,6 +121,11 @@ async function set(valores) {
   if ((valores.meta_app_id !== undefined || valores.meta_config_id !== undefined) && appId && configId && appId === configId)
     throw new HttpError(400, 'El Configuration ID no es el App ID: cópialo de Inicio de sesión con Facebook para empresas → Configuraciones (la de WhatsApp Embedded Signup).');
 
+  // Rangos que dependen de dos campos
+  const num = k => parseInt(valores[k] ?? actual[k], 10);
+  if (num('ab_delay_min_seg') > num('ab_delay_max_seg')) throw new HttpError(400, 'La pausa mínima entre mensajes no puede ser mayor que la máxima.');
+  if (num('ab_lote_pausa_min') > num('ab_lote_pausa_max')) throw new HttpError(400, 'El descanso mínimo entre lotes no puede ser mayor que el máximo.');
+
   const cambiadas = [];
   for (const [clave, raw] of Object.entries(valores || {})) {
     const d = DEFS[clave];
@@ -106,6 +141,8 @@ async function set(valores) {
       v = String(n);
     } else if (d.tipo === 'bool') {
       v = (v === '1' || v === 'true') ? '1' : '0';
+    } else if (d.tipo === 'opcion') {
+      if (!d.opciones.includes(v)) throw new HttpError(400, `Valor inválido para "${d.label}"`);
     } else {
       v = v.slice(0, 1000);
     }
@@ -132,7 +169,7 @@ async function vistaPublica() {
   return out;
 }
 
-// ¿Hay un número de WhatsApp conectado y listo para enviar?
+// ¿Meta tiene un número conectado y listo? (el proveedor activo se consulta en wa/proveedor.js)
 async function metaConfigurado() {
   const [[c]] = await db.query("SELECT estado, phone_number_id, access_token FROM wa_cuenta WHERE id = 1");
   return !!(c && c.estado === 'conectado' && c.phone_number_id && c.access_token);

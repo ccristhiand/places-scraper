@@ -10,8 +10,9 @@ const db      = require('../db');
 const meta    = require('../meta');
 const config  = require('../lib/config');
 const { ESTADO_DESDE_META } = require('../lib/plantillas');
-const { emitir, notificar, notificarPermiso } = require('../lib/notificar');
+const { emitir, notificarPermiso } = require('../lib/notificar');
 const { UPLOADS } = require('../lib/mensajeria');
+const { registrarEntrante, registrarEstado } = require('../lib/entrantes');
 
 const log = (...a) => console.log(new Date().toISOString(), '[webhook]', ...a);
 
@@ -130,119 +131,31 @@ function contenidoDe(m) {
   }
 }
 
-async function buscarContacto(numero) {
-  const corto = numero.startsWith('51') ? numero.slice(2) : numero;
-  const [[n]] = await db.query(`
-    SELECT * FROM negocios
-    WHERE wa_jid = ? OR REPLACE(REPLACE(REPLACE(COALESCE(whatsapp,''),'+',''),' ',''),'-','') IN (?, ?)
-       OR REPLACE(REPLACE(REPLACE(COALESCE(telefono_int,''),'+',''),' ',''),'-','') IN (?, ?)
-       OR REPLACE(REPLACE(REPLACE(COALESCE(telefono,''),'+',''),' ',''),'-','') IN (?, ?)
-    ORDER BY (wa_jid = ?) DESC, id ASC LIMIT 1`,
-    [numero, numero, corto, numero, corto, numero, corto, numero]);
-  return n || null;
-}
-
+// Mensaje entrante de Meta → registro común (entrantes.js)
 async function procesarMensaje(m, contactos) {
   const numero = String(m.from || '').replace(/\D/g, '');
   if (!numero || !m.id) return;
-
-  const [[dup]] = await db.query('SELECT id FROM chat_mensajes WHERE wa_id = ? LIMIT 1', [m.id]);
-  if (dup) return;
-
-  let negocio = await buscarContacto(numero);
-  const perfil = contactos.find(c => c.wa_id === m.from)?.profile?.name;
-
-  if (!negocio && await config.getBool('chat_crear_contacto')) {
-    const [r] = await db.query(
-      `INSERT INTO negocios (place_id, nombre, whatsapp, wa_jid, wa_verificado, origen, estado_crm)
-       VALUES (?, ?, ?, ?, 1, 'whatsapp', (SELECT clave FROM etapas ORDER BY orden LIMIT 1))`,
-      [`wa:${numero}`, perfil || `+${numero}`, numero, numero]);
-    [[negocio]] = await db.query('SELECT * FROM negocios WHERE id = ?', [r.insertId]);
-    await db.query('INSERT INTO crm_historial (negocio_id, tipo, contenido, usuario) VALUES (?,?,?,?)',
-      [negocio.id, 'sistema', 'Contacto creado automáticamente al recibir un WhatsApp', 'Sistema']);
-  }
-
   const { tipo, texto, media } = contenidoDe(m);
   let mediaUrl = null;
   if (media && (tipo === 'imagen' || tipo === 'audio' || tipo === 'documento')) {
     try { mediaUrl = '/uploads/entrantes/' + await meta.descargarMedia(media, path.join(UPLOADS, 'entrantes')); }
     catch (e) { console.error('Descarga media:', e.message); }
   }
-
-  const ts = m.timestamp ? new Date(parseInt(m.timestamp, 10) * 1000) : new Date();
-  const [r] = await db.query(
-    `INSERT INTO chat_mensajes (negocio_id, numero, direccion, tipo, contenido, media_url, wa_id, leido, created_at)
-     VALUES (?,?,?,?,?,?,?,0,?)`,
-    [negocio?.id || null, numero, 'entrante', tipo, texto || '', mediaUrl, m.id, ts]);
-
-  if (negocio) {
-    await db.query(
-      `UPDATE negocios SET ultimo_entrante_at = NOW(), ultima_actividad_at = NOW(), wa_verificado = 1,
-         wa_jid = COALESCE(wa_jid, ?), whatsapp = IF(COALESCE(whatsapp,'') = '', ?, whatsapp) WHERE id = ?`,
-      [numero, numero, negocio.id]);
-
-    // Avance automático de etapa cuando responde un contacto en la primera etapa
-    const etapaResp = await config.get('chat_etapa_respuesta');
-    if (etapaResp && negocio.estado_crm !== etapaResp) {
-      const [[primera]] = await db.query('SELECT clave FROM etapas ORDER BY orden LIMIT 1');
-      const [[existe]]  = await db.query('SELECT clave FROM etapas WHERE clave = ?', [etapaResp]);
-      if (existe && primera && negocio.estado_crm === primera.clave) {
-        await db.query('UPDATE negocios SET estado_crm = ? WHERE id = ?', [etapaResp, negocio.id]);
-        await db.query('INSERT INTO crm_historial (negocio_id, tipo, estado_anterior, estado_nuevo, contenido, usuario) VALUES (?,?,?,?,?,?)',
-          [negocio.id, 'estado', negocio.estado_crm, etapaResp, 'El contacto respondió por WhatsApp', 'Sistema']);
-      }
-    }
-    if (negocio.asignado_a) {
-      await notificar([negocio.asignado_a], {
-        tipo: 'mensaje', titulo: `Nuevo mensaje de ${negocio.nombre}`,
-        cuerpo: (texto || '').slice(0, 120), enlace: `#/bandeja/${negocio.id}`,
-      });
-    }
-  }
-
-  emitir('chat:mensaje', {
-    id: r.insertId, negocio_id: negocio?.id || null, negocio_nombre: negocio?.nombre || perfil || numero,
-    numero, direccion: 'entrante', tipo, contenido: texto || '', media_url: mediaUrl, created_at: ts,
+  await registrarEntrante({
+    numero, jid: numero, perfil: contactos.find(c => c.wa_id === m.from)?.profile?.name, waId: m.id, tipo, texto, mediaUrl,
+    ts: m.timestamp ? new Date(parseInt(m.timestamp, 10) * 1000) : new Date(),
   });
 }
 
-const ORDEN_ESTADO = { enviado: 1, entregado: 2, leido: 3, fallido: 4 };
-const MAPA_ESTADO  = { sent: 'enviado', delivered: 'entregado', read: 'leido', failed: 'fallido' };
+const MAPA_ESTADO = { sent: 'enviado', delivered: 'entregado', read: 'leido', failed: 'fallido' };
 
 async function procesarEstado(s) {
-  const estado = MAPA_ESTADO[s.status];
-  if (!estado || !s.id) return;
   const err = s.errors?.[0];
-  const errorMsg = err ? `${err.error_data?.details || err.title || err.message} (código ${err.code})`.slice(0, 500) : null;
-
-  // No retroceder estados (Meta puede enviarlos desordenados)
-  const [[msg]] = await db.query('SELECT id, negocio_id, estado_entrega FROM chat_mensajes WHERE wa_id = ? LIMIT 1', [s.id]);
-  if (msg && (estado === 'fallido' || (ORDEN_ESTADO[estado] > (ORDEN_ESTADO[msg.estado_entrega] || 0)))) {
-    await db.query('UPDATE chat_mensajes SET estado_entrega = ?, error_msg = ? WHERE id = ?', [estado, errorMsg, msg.id]);
-  }
-
-  const [[envio]] = await db.query('SELECT id, estado, negocio_id, campana_id FROM envios WHERE wa_message_id = ? LIMIT 1', [s.id]);
-  if (envio) {
-    if (estado === 'entregado' && envio.estado === 'enviado')
-      await db.query("UPDATE envios SET estado = 'entregado', entregado_at = NOW() WHERE id = ?", [envio.id]);
-    else if (estado === 'leido' && ['enviado', 'entregado'].includes(envio.estado))
-      await db.query("UPDATE envios SET estado = 'leido', leido_at = NOW(), entregado_at = COALESCE(entregado_at, NOW()) WHERE id = ?", [envio.id]);
-    else if (estado === 'fallido' && envio.estado !== 'fallido') {
-      await db.query("UPDATE envios SET estado = 'fallido', error_msg = ? WHERE id = ?", [errorMsg, envio.id]);
-      // Meta lo aceptó pero no pudo entregarlo: pasa de enviado a fallido en la campaña
-      if (envio.campana_id && ['enviado', 'entregado', 'leido'].includes(envio.estado))
-        await db.query('UPDATE campanas SET enviados = GREATEST(enviados - 1, 0), fallidos = fallidos + 1 WHERE id = ?', [envio.campana_id]);
-    }
-    emitir('envio:estado', { id: envio.id, campana_id: envio.campana_id, estado });
-  }
-
-  const negocioId = msg?.negocio_id || envio?.negocio_id;
-  if (negocioId && estado === 'fallido' && err?.code === 131026)
-    await db.query('UPDATE negocios SET wa_verificado = 0 WHERE id = ?', [negocioId]);
-  if (negocioId && (estado === 'entregado' || estado === 'leido'))
-    await db.query('UPDATE negocios SET wa_verificado = 1 WHERE id = ? AND wa_verificado IS NULL', [negocioId]);
-
-  if (msg) emitir('chat:estado', { wa_id: s.id, negocio_id: negocioId, estado, error: errorMsg });
+  await registrarEstado({
+    waId: s.id, estado: MAPA_ESTADO[s.status],
+    errorMsg: err ? `${err.error_data?.details || err.title || err.message} (código ${err.code})`.slice(0, 500) : null,
+    sinWhatsapp: err?.code === 131026,
+  });
 }
 
 module.exports = router;

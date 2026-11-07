@@ -65,7 +65,9 @@ router.post('/logout', A.csrfGuard, ah(async (req, res) => {
 router.get('/me', A.requireAuth, ah(async (req, res) => {
   const empresa = await config.get('empresa_nombre');
   const moneda  = await config.get('empresa_moneda');
-  res.json({ ok: true, usuario: A.usuarioPublico(req.user), empresa, moneda, meta: await config.metaConfigurado() });
+  const P = require('../wa/proveedor');
+  // "meta" se conserva por compatibilidad: indica si el WhatsApp activo está listo para enviar
+  res.json({ ok: true, usuario: A.usuarioPublico(req.user), empresa, moneda, meta: await P.conectado(), proveedor: await P.activo() });
 }));
 
 router.post('/cambiar-password', A.csrfGuard, A.requireAuth, loginLimiter, ah(async (req, res) => {

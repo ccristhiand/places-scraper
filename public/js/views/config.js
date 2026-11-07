@@ -1,7 +1,7 @@
 import { html, raw, icon, api, render as dibujar, acciones, can, toast, toastError, $, $$, cargando, opciones, etapas, conCarga, formData, session, confirmar } from '../core.js';
 
 const TABS = [
-  ['empresa', 'Empresa', 'settings'], ['meta', 'WhatsApp (Meta)', 'whatsapp'], ['google', 'Google Places', 'search'],
+  ['empresa', 'Empresa', 'settings'], ['meta', 'WhatsApp', 'whatsapp'], ['antiban', 'Antibaneo (QR)', 'shield'], ['google', 'Google Places', 'search'],
   ['envios', 'Envíos masivos', 'send'], ['chat', 'Bandeja y recordatorios', 'chat'], ['pipeline', 'Etapas del pipeline', 'kanban'],
   ['leads', 'Formulario de leads', 'inbox'], ['proyectos', 'Proyectos', 'layers'], ['seguridad', 'Seguridad', 'shield'],
 ];
@@ -21,6 +21,21 @@ export async function render(el, params) {
   if (innerWidth < 900) $('[data-layout]', el).style.gridTemplateColumns = 'minmax(0,1fr)';
   try { st.cfg = await api.get('/api/config'); } catch (e) { toastError(e); return; }
   acciones(el, {
+    proveedor: async b => {
+      const nuevo = b.dataset.p;
+      if (nuevo === v('wa_proveedor')) return;
+      const texto = nuevo === 'baileys'
+        ? 'Los mensajes saldrán por WhatsApp Web (QR). Es más económico, pero no es oficial: WhatsApp puede bloquear el número. Las campañas en curso seguirán con el nuevo proveedor.'
+        : 'Los mensajes saldrán por la API oficial de Meta. La sesión de WhatsApp QR se conserva para volver sin escanear.';
+      if (!(await confirmar(texto, { titulo: nuevo === 'baileys' ? 'Usar WhatsApp QR' : 'Usar la API de Meta', ok: 'Cambiar proveedor' }))) return;
+      try {
+        await api.put('/api/config', { valores: { wa_proveedor: nuevo } });
+        session.proveedor = nuevo;
+        st.cfg = await api.get('/api/config');
+        toast(nuevo === 'baileys' ? 'Proveedor: WhatsApp QR. Conecta el número en WhatsApp → Conexión.' : 'Proveedor: API oficial de Meta');
+        pintar(el);
+      } catch (e) { toastError(e); }
+    },
     'probar-meta': b => conCarga(b, async () => {
       try {
         const r = await api.post('/api/whatsapp/probar-app');
@@ -69,6 +84,60 @@ const copia = (label, val) => html`<div class="field"><span class="label">${labe
 const seccion = (titulo, desc, cuerpo, { form = true, extra = '' } = {}) => html`<div class="card"><div class="card-head"><div><h3>${titulo}</h3>${desc ? html`<p class="small muted" style="margin-top:3px">${desc}</p>` : ''}</div>${extra}</div>
   <div class="card-body">${form ? html`<form class="form-grid" data-cfg>${cuerpo}${st.editable ? html`<div class="span-2 row"><button class="btn btn-primary right" type="submit">Guardar cambios</button></div>` : ''}</form>` : cuerpo}</div></div>`;
 
+// ── Proveedor de WhatsApp (solo uno activo) ─────────────────────────────────
+function proveedorCard() {
+  const p = v('wa_proveedor') || 'meta';
+  const opcion = (k, titulo, puntos) => html`<button type="button" class="card" data-act="proveedor" data-p="${k}" ${st.editable ? '' : raw('disabled')}
+      style="text-align:left;padding:14px 16px;cursor:${raw(st.editable ? 'pointer' : 'default')};font:inherit;color:inherit;${raw(p === k ? 'border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)' : '')}">
+      <div class="row between"><b>${titulo}</b>${p === k ? html`<span class="badge success">Activo</span>` : html`<span class="badge">Inactivo</span>`}</div>
+      <ul class="small muted" style="margin:8px 0 0;padding-left:18px">${puntos.map(x => html`<li>${x}</li>`)}</ul></button>`;
+  return html`<div class="card"><div class="card-head"><div><h3>Proveedor de WhatsApp</h3>
+      <p class="small muted" style="margin-top:3px">Solo uno envía mensajes a la vez. La bandeja, las campañas, los recordatorios y los avisos usan el que esté activo.</p></div></div>
+    <div class="card-body grid c2">
+      ${opcion('meta', 'API oficial de Meta', ['Sin riesgo de bloqueo por usar la API', 'Cobra por conversación iniciada con plantilla', 'Campañas solo con plantillas aprobadas', 'Responder dentro de 24 h no tiene costo'])}
+      ${opcion('baileys', 'WhatsApp QR (WhatsApp Web)', ['Sin costo por mensaje', 'Campañas de texto libre con variaciones', 'No es oficial: WhatsApp puede bloquear el número', 'Protección antibaneo configurable'])}
+    </div></div>`;
+}
+
+// ── Antibaneo (WhatsApp QR) ─────────────────────────────────────────────────
+function antibaneo() {
+  const n = k => parseInt(v(k), 10) || 0;
+  const promedio = (n('ab_delay_min_seg') + n('ab_delay_max_seg')) / 2 + Math.max(1.5, 160 / Math.max(3, n('ab_escritura_cps'))) / 2;
+  const lote = n('ab_lote_tamano'), pausaLote = ((n('ab_lote_pausa_min') + n('ab_lote_pausa_max')) / 2) * 60;
+  const porHoraRitmo = Math.round(3600 / ((promedio * lote + pausaLote) / lote));
+  const porHora = Math.min(porHoraRitmo, n('ab_limite_hora'));
+  const qr = v('wa_proveedor') === 'baileys';
+  return html`
+    ${qr ? '' : html`<div class="alert info mb">${icon('info')}<div>Estas reglas se aplican cuando el proveedor activo es <b>WhatsApp QR</b> (Configuración → WhatsApp). Las bajas automáticas funcionan con ambos proveedores.</div></div>`}
+    <div class="alert mb">${icon('shield')}<div>
+      <b>Con esta configuración</b>: alrededor de <b>${porHora} mensajes por hora</b> como máximo (un mensaje cada ${Math.round(promedio)} s en promedio y un descanso de ~${Math.round(pausaLote / 60)} min cada ${lote} mensajes),
+      con un tope de <b>${n('ab_limite_dia')}</b> al día${v('ab_calentamiento_activo') === '1' ? html` y un calentamiento que empieza en <b>${n('ab_calentamiento_inicio')}</b> el primer día (+${n('ab_calentamiento_incremento')} por día)` : ''}.
+      <div class="xs muted" style="margin-top:4px">Ninguna configuración elimina el riesgo de bloqueo. Lo que más lo provoca es que los destinatarios bloqueen o reporten tu número: escribe a contactos relevantes, con mensajes personalizados y una forma clara de darse de baja.</div></div></div>
+    ${seccion('Ritmo de envío', 'Pausas aleatorias entre mensajes para que el envío no tenga un patrón fijo.', html`
+      ${campo('ab_delay_min_seg', { hint: 'Recomendado: 45 s o más.' })}${campo('ab_delay_max_seg', { hint: 'Recomendado: 120 s o más.' })}
+      ${campo('ab_lote_tamano', { hint: 'Después de este número de mensajes se toma un descanso.' })}<div></div>
+      ${campo('ab_lote_pausa_min')}${campo('ab_lote_pausa_max')}`)}
+    <div class="mt">${seccion('Límites', 'Topes que nunca se superan, aunque haya campañas pendientes. El horario y los días permitidos están en Envíos masivos.', html`
+      ${campo('ab_limite_hora', { hint: 'Recomendado: 20–40.' })}${campo('ab_limite_dia', { hint: 'Recomendado para un número con antigüedad: 100–200.' })}
+      ${campo('ab_calentamiento_activo', { span: true, hint: 'Un número nuevo o recién vinculado empieza con pocos mensajes y sube cada día hasta el límite diario.' })}
+      ${campo('ab_calentamiento_inicio')}${campo('ab_calentamiento_incremento', { hint: 'Ej. 20 → 35 → 50 → 65…' })}`)}</div>
+    <div class="mt">${seccion('Comportamiento humano', null, html`
+      ${campo('ab_simular_escritura', { span: true, hint: 'El contacto ve "escribiendo…" unos segundos antes de recibir el mensaje, según su largo.' })}
+      ${campo('ab_escritura_cps', { hint: 'Una persona escribe entre 8 y 20 caracteres por segundo.' })}
+      ${campo('ab_nombre_dispositivo', { hint: 'Nombre que verás en WhatsApp → Dispositivos vinculados.' })}
+      ${campo('ab_en_linea', { span: true, hint: 'Si lo desactivas, tu celular sigue recibiendo las notificaciones normalmente.' })}
+      ${campo('ab_marcar_leido', { span: true, hint: 'Los mensajes se marcan como leídos (doble check azul) cuando abres la conversación en el CRM.' })}`)}</div>
+    <div class="mt">${seccion('Calidad de la lista', 'Escribir a números que no existen o a quien no quiere recibir mensajes es lo que más daña la reputación del número.', html`
+      ${campo('ab_verificar_numero', { span: true, hint: 'Antes de cada envío se consulta si el número tiene WhatsApp. Los que no tienen quedan marcados y no se vuelven a intentar.' })}
+      ${campo('ab_exigir_variacion', { span: true, hint: 'No deja crear campañas con el mismo texto exacto para todos.' })}
+      ${campo('ab_orden_aleatorio', { span: true })}
+      ${campo('ab_dias_entre_campanas', { hint: '0 = sin restricción.' })}${campo('ab_max_fallos_pct', { hint: 'Con 10 o más envíos de muestra.' })}`)}</div>
+    <div class="mt">${seccion('Bajas automáticas', 'Funciona con ambos proveedores. Quien responde solo con una de estas palabras queda excluido de todas las campañas.', html`
+      ${campo('optout_activo', { span: true })}
+      ${campo('optout_palabras', { span: true, hint: 'Se compara el mensaje completo, sin tildes ni mayúsculas (así "No me interesa" cuenta, pero "no sé el precio" no).' })}
+      ${campo('optout_respuesta', { span: true })}`)}</div>`;
+}
+
 function filaEtapa(e) {
   return html`<div class="row" data-etapa data-clave="${e.clave || ''}" style="padding:8px 0;border-bottom:1px solid var(--border)">
     <input type="color" name="color" value="${e.color}" style="width:38px;height:34px;border:0;background:none;padding:0" aria-label="Color" ${dis()}>
@@ -89,7 +158,9 @@ async function pintar(el) {
       ${campo('empresa_nombre')}${campo('empresa_moneda', { opts: [['PEN', 'Soles (PEN)'], ['USD', 'Dólares (USD)'], ['COP', 'Pesos colombianos (COP)'], ['MXN', 'Pesos mexicanos (MXN)'], ['CLP', 'Pesos chilenos (CLP)'], ['EUR', 'Euros (EUR)']] })}
       ${campo('empresa_zona_horaria', { opts: ZONAS.map(z => [z, z]) })}${campo('empresa_codigo_pais', { hint: 'Se antepone a números locales (ej. 51 para Perú).' })}`); break;
 
-    case 'meta': cuerpo = html`${seccion('App de Meta', 'Datos de tu app en developers.facebook.com (tipo Empresa, con el producto WhatsApp y el inicio de sesión de Facebook para empresas). El número se conecta después en WhatsApp → Conexión.', html`
+    case 'antiban': cuerpo = antibaneo(); break;
+
+    case 'meta': cuerpo = html`${proveedorCard()}<div class="mt"></div>${seccion('App de Meta', 'Datos de tu app en developers.facebook.com (tipo Empresa, con el producto WhatsApp y el inicio de sesión de Facebook para empresas). El número se conecta después en WhatsApp → Conexión.', html`
       ${campo('meta_app_id', { placeholder: 'ej. 1234567890123456', hint: 'Panel de la app → Configuración → Básica.' })}
       ${campo('meta_config_id', { placeholder: 'ej. 987654321098765', hint: 'Inicio de sesión de Facebook para empresas → Configuraciones (Embedded Signup de WhatsApp).' })}
       ${campo('meta_app_secret', { span: true, hint: 'Configuración → Básica → Clave secreta. Valida los avisos del webhook y el intercambio del código de Embedded Signup.' })}
@@ -141,8 +212,8 @@ async function pintar(el) {
   }
   dibujar(cont, cuerpo);
 
-  const form = $('[data-cfg]', cont);
-  form?.addEventListener('submit', async e => {
+  // Cada sección guarda sus propios campos (una pestaña puede tener varias)
+  $$('[data-cfg]', cont).forEach(form => form.addEventListener('submit', async e => {
     e.preventDefault();
     const d = formData(form);
     for (const [k, val] of Object.entries(d)) if (typeof val === 'boolean') d[k] = val ? '1' : '0';
@@ -155,5 +226,5 @@ async function pintar(el) {
         toast('Configuración guardada'); pintar(el);
       } catch (ex) { toastError(ex); }
     });
-  });
+  }));
 }

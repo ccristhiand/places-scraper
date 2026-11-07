@@ -33,7 +33,7 @@ function iniciar() {
 
 // Recordatorio único por reunión: 24 h antes (si se agendó con margen) y 1 h antes
 async function recordatorios() {
-  if (!(await config.getBool('recordatorios_activo')) || !(await config.metaConfigurado())) return;
+  if (!(await config.getBool('recordatorios_activo')) || !(await require('./wa/proveedor').conectado())) return;
   const tz = await config.get('empresa_zona_horaria');
 
   const [d24] = await db.query(`
@@ -58,24 +58,22 @@ async function recordar(d, campo, cuando, tz) {
   const enlace = d.enlace || '-';
   let resultado;
   try {
-    if (ventanaAbierta(negocio)) {
-      const texto = `📅 *Recordatorio*\n\nHola ${d.nombre}, te recordamos tu reunión *${d.titulo || 'programada'}* ${cuando}.\n\n🗓️ ${fecha}${d.enlace ? `\n🔗 ${d.enlace}` : ''}\n\n¡Te esperamos!`;
-      await enviarAContacto(negocio, { texto }, { origen: 'recordatorio' });
+    // Texto libre si hay ventana de 24 h (Meta) o con WhatsApp Web (no existe esa regla)
+    if (ventanaAbierta(negocio) || !(await require('./wa/proveedor').requiereVentana())) {
+      const texto = `📅 *Recordatorio*\n\nHola ${d.contacto_nombre || d.nombre}, te recordamos tu reunión *${d.titulo || 'programada'}* ${cuando}.\n\n🗓️ ${fecha}${d.enlace ? `\n🔗 ${d.enlace}` : ''}\n\n¡Te esperamos!`;
+      await enviarAContacto(negocio, { texto }, { origen: 'recordatorio', exigirVentana: false });
       resultado = `Recordatorio (${cuando}) enviado por WhatsApp`;
     } else {
-      // Fuera de la ventana de 24 h: plantilla del sistema "crm_recordatorio_reunion" (si Meta la aprobó)
-      const p = await plantillas.aprobadaPara('recordatorio_reunion');
-      if (!p) {
+      // Fuera de la ventana de 24 h con Meta: plantilla del sistema "crm_recordatorio_reunion"
+      const m = await plantillas.mensajeSistema('recordatorio_reunion', {
+        contacto: d.contacto_nombre || d.nombre,
+        fecha: new Date(d.fecha_hora).toLocaleDateString('es-PE', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' }),
+        hora: new Date(d.fecha_hora).toLocaleTimeString('es-PE', { timeZone: tz, hour: '2-digit', minute: '2-digit' }),
+      });
+      if (!m) {
         resultado = `Recordatorio (${cuando}) no enviado: fuera de la ventana de 24 h y la plantilla de recordatorios no está aprobada (WhatsApp → Recordatorios)`;
       } else {
-        const valores = {
-          contacto: d.contacto_nombre || d.nombre,
-          fecha: new Date(d.fecha_hora).toLocaleDateString('es-PE', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' }),
-          hora: new Date(d.fecha_hora).toLocaleTimeString('es-PE', { timeZone: tz, hour: '2-digit', minute: '2-digit' }),
-        };
-        await enviarAContacto(negocio, { plantilla: {
-          nombre: p.nombre_meta, idioma: p.idioma, params: p.variables.map(k => valores[k] || '-'), cuerpo: p.cuerpo,
-        } }, { origen: 'recordatorio' });
+        await enviarAContacto(negocio, m, { origen: 'recordatorio', exigirVentana: false });
         resultado = `Recordatorio (${cuando}) enviado por WhatsApp`;
       }
     }

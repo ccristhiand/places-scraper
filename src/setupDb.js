@@ -127,6 +127,8 @@ async function migrar({ log = console.log } = {}) {
   await addIdx('negocios', 'idx_ventana', 'ultimo_entrante_at');
   await addIdx('negocios', 'idx_whatsapp', 'whatsapp');
   await addIdx('negocios', 'idx_created', 'created_at');
+  await addCol('negocios', 'no_contactar',       'TINYINT(1) DEFAULT 0');
+  await addCol('negocios', 'no_contactar_at',    'DATETIME NULL');
 
   await conn.query(`CREATE TABLE IF NOT EXISTS etapas (
     id     INT AUTO_INCREMENT PRIMARY KEY,
@@ -652,5 +654,6 @@ async function migrar({ log = console.log } = {}) {
 module.exports = { migrar };
 
 if (require.main === module) {
-  migrar().catch(err => { console.error('❌', err.message); process.exit(1); });
+  // Salida explícita: el pool de la app (cargado por auth/config) mantendría vivo el proceso
+  migrar().then(() => process.exit(0)).catch(err => { console.error('❌', err.message); process.exit(1); });
 }

@@ -1,5 +1,5 @@
-// Campañas por WhatsApp con plantillas aprobadas por Meta
-import { html, raw, icon, api, render as dibujar, acciones, fmt, can, vacio, toast, toastError, confirmar, $, $$, cargando, modal, conCarga, etapas, usuarios, opciones, debounce, bus, inputFecha, esc } from '../core.js';
+// Campañas por WhatsApp: plantillas aprobadas (Meta) o texto libre con variaciones (WhatsApp QR)
+import { html, raw, icon, api, render as dibujar, acciones, fmt, can, vacio, toast, toastError, confirmar, $, $$, cargando, modal, conCarga, etapas, usuarios, opciones, debounce, bus, inputFecha, esc, session } from '../core.js';
 import { camposUbigeo, enlazarUbigeo, pager } from '../ui.js';
 
 const ESTADOS = {
@@ -61,12 +61,13 @@ function fila(c) {
   const hechos = Number(c.enviados) + Number(c.fallidos);
   const total = Number(c.total) || hechos + Number(c.pendientes);
   const pct = total ? Math.round((hechos / total) * 100) : 0;
-  const legado = c.tipo === 'texto';
+  // Campañas de texto anteriores al CRM (sin autor) quedan solo como historial
+  const legado = c.tipo === 'texto' && !c.creado_por_nombre;
   const ej = can('envios.ejecutar') && !legado;
   const btn = (a, t, extra = '') => html`<button class="btn btn-xs ${extra}" data-act="accion" data-a="${a}" data-id="${c.id}">${t}</button>`;
   return html`<tr>
     <td><a href="#" class="strong" data-act="detalle" data-id="${c.id}">${c.nombre}</a>
-      <div class="xs muted">${legado ? 'Sistema anterior · texto libre' : html`Plantilla <span class="mono">${c.plantilla || c.template_nombre || '—'}</span>`}
+      <div class="xs muted">${legado ? 'Sistema anterior · texto libre' : c.tipo === 'texto' ? 'Texto libre · WhatsApp QR' : html`Plantilla <span class="mono">${c.plantilla || c.template_nombre || '—'}</span>`}
         ${c.programada_at && c.estado === 'programada' ? ` · ${fmt.fechaHora(c.programada_at)}` : ''}</div>
       ${c.ultimo_error && ['pausada', 'enviando'].includes(c.estado) ? html`<div class="xs" style="color:var(--warning)">${c.ultimo_error}</div>` : ''}</td>
     <td><span class="badge ${tone}">${txt}</span></td>
@@ -119,12 +120,14 @@ function detalle(c) {
 
 // ── Asistente: plantilla → datos → audiencia → cuándo ──────────────────────
 async function asistente(el, { ids } = {}) {
+  // Con WhatsApp QR las campañas son de texto libre; con Meta, de plantilla aprobada
+  const modoTexto = session.proveedor === 'baileys';
   try {
-    if (!st.plantillas) st.plantillas = (await api.get('/api/whatsapp/plantillas')).rows;
     if (!st.variables) st.variables = (await api.get('/api/campanas/variables')).variables;
+    if (!modoTexto && !st.plantillas) st.plantillas = (await api.get('/api/whatsapp/plantillas')).rows;
   } catch (e) { return toastError(e); }
-  const aprobadas = st.plantillas.filter(t => t.estado === 'APPROVED' && (!t.header || ['TEXT', 'IMAGE'].includes(t.header)));
-  if (!aprobadas.length) {
+  const aprobadas = modoTexto ? [] : st.plantillas.filter(t => t.estado === 'APPROVED' && (!t.header || ['TEXT', 'IMAGE'].includes(t.header)));
+  if (!modoTexto && !aprobadas.length) {
     return modal({ title: 'Nueva campaña', size: 'sm',
       body: html`<p class="muted">No tienes plantillas aprobadas por Meta. Crea una (categoría Marketing) y espera su aprobación; suele tardar entre minutos y unas horas.</p>`,
       foot: html`<button class="btn" data-close>Cerrar</button><a class="btn btn-primary" href="#/whatsapp/plantillas" data-close>Crear plantilla</a>` });
@@ -137,11 +140,19 @@ async function asistente(el, { ids } = {}) {
     body: html`<form class="stack" data-f novalidate>
       <label class="field"><span>Nombre de la campaña *</span><input class="input" name="nombre" required maxlength="150" placeholder="Ej. Promoción noviembre — ferreterías Lima sur"></label>
       <div class="divider" style="margin:4px 0"></div>
+      ${modoTexto ? html`
+      <div class="label">1. Mensaje <span class="xs muted" style="font-weight:400">· WhatsApp QR</span></div>
+      <textarea class="input" name="mensaje" rows="7" maxlength="4096" placeholder="{Hola|Buenas|Qué tal} [contacto] 👋 ¿hablo con *[nombre]*?&#10;&#10;Te escribo porque…"></textarea>
+      <div class="row wrap"><span class="xs muted">Insertar:</span>${vars.filter(([k]) => k !== 'telefono').map(([k, t]) => html`<button type="button" class="tag" data-tag="${k}" title="${t}" style="cursor:pointer">[${k}]</button>`)}
+        <button type="button" class="tag" data-spin style="cursor:pointer" title="Cada contacto recibe una de las opciones al azar">{variación|otra}</button></div>
+      <div class="field" data-img><span>Imagen (opcional)</span><input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="input" style="padding:5px"><span class="hint">Se envía con el mensaje como pie de foto.</span></div>
+      <div><div class="label" style="margin-bottom:6px">Así lo recibirán (3 ejemplos al azar)</div><div class="stack sm" data-prevs></div><ul class="reqs" data-avisos></ul></div>`
+      : html`
       <div class="label">1. Plantilla</div>
       <select class="select" name="plantilla">${aprobadas.map((t, i) => html`<option value="${i}">${t.nombre} · ${t.idioma} · ${{ MARKETING: 'Marketing', UTILITY: 'Utilidad' }[t.categoria] || t.categoria}</option>`)}</select>
       <div data-vars></div>
       <div class="field hidden" data-img><span>Imagen del encabezado *</span><input type="file" name="imagen" accept="image/jpeg,image/png" class="input" style="padding:5px"><span class="hint">JPG o PNG, máx. 5 MB.</span></div>
-      <div><div class="label" style="margin-bottom:6px">Vista previa</div><div class="bubble out" style="max-width:100%" data-prev></div></div>
+      <div><div class="label" style="margin-bottom:6px">Vista previa</div><div class="bubble out" style="max-width:100%" data-prev></div></div>`}
       <div class="divider" style="margin:4px 0"></div>
       <div class="label">2. ¿A quién?</div>
       ${ids ? html`<p class="small muted">${ids.length} contactos elegidos en la lista de Contactos.</p>` : html`<div class="form-grid">
@@ -166,7 +177,23 @@ async function asistente(el, { ids } = {}) {
       const f = $('[data-f]', m.el);
       let cuando = 'ahora';
       const tpl = () => aprobadas[+f.plantilla.value];
+      // Modo texto: vista previa real (datos de un contacto + variaciones) y avisos de riesgo
+      const previaTexto = debounce(async () => {
+        const msg = f.mensaje.value;
+        const avisos = [];
+        if (msg.trim() && !/\[[a-z_]+\]|\{\{\s*\w+\s*\}\}|\{[^{}]*\|[^{}]*\}/i.test(msg)) avisos.push('El mensaje es igual para todos: agrega [contacto] o variaciones {a|b} para reducir el riesgo de bloqueo.');
+        if ((msg.match(/https?:\/\/|www\./gi) || []).length > 1) avisos.push('Más de un enlace en el mismo mensaje aumenta el riesgo de que lo marquen como spam.');
+        if (msg.length > 700) avisos.push('Los mensajes largos se leen menos: intenta dejarlo en menos de 700 caracteres.');
+        if (msg.trim() && !/\b(no|baja|stop)\b/i.test(msg)) avisos.push('Sugerencia: indica cómo dejar de recibir mensajes (ej. "Si no te interesa, responde NO").');
+        dibujar($('[data-avisos]', f), html`${avisos.map(a => html`<li style="color:var(--warning)">• ${a}</li>`)}`);
+        if (!msg.trim()) { dibujar($('[data-prevs]', f), html`<p class="small muted">Escribe el mensaje para ver la vista previa.</p>`); return; }
+        try {
+          const r = await api.post('/api/campanas/vista-previa', { mensaje: msg });
+          dibujar($('[data-prevs]', f), html`${r.ejemplos.map(t => html`<div class="bubble out small" style="max-width:100%">${t}</div>`)}<div class="xs muted">Con los datos de: ${r.contacto}</div>`);
+        } catch (_) { /* vista previa no crítica */ }
+      }, 400);
       const pintarVars = () => {
+        if (modoTexto) return previaTexto();
         const t = tpl();
         const nombres = t.variables_nombres || [];
         dibujar($('[data-vars]', f), t.variables ? html`<div class="small muted" style="margin:4px 0 8px">Qué va en cada dato variable:</div>
@@ -204,7 +231,8 @@ async function asistente(el, { ids } = {}) {
           const dias = Math.ceil(n / Math.max(1, r.limite_diario));
           dibujar($('[data-aud]', m.el), html`<div class="row"><span class="kpi-value" style="font-size:20px">${fmt.num(r.total)}</span><span class="muted">contactos cumplen los filtros${r.total > n ? ` · se enviarán ${fmt.num(n)}` : ''}</span></div>
             ${r.muestra.length ? html`<div class="xs muted" style="margin-top:4px">Ej.: ${r.muestra.map(x => x.nombre).join(', ')}…</div>` : ''}
-            ${dias > 1 ? html`<div class="xs" style="color:var(--warning);margin-top:6px">Con el límite de ${fmt.num(r.limite_diario)} mensajes por día tomará unos ${dias} días; continúa sola cada día.</div>` : ''}`);
+            ${dias > 1 ? html`<div class="xs" style="color:var(--warning);margin-top:6px">Con el límite de ${fmt.num(r.limite_diario)} mensajes por día${r.limites?.calentamiento ? ` (día ${r.limites.calentamiento.dia} de calentamiento)` : ''} tomará unos ${dias} días; continúa sola cada día.</div>` : ''}
+            ${modoTexto ? html`<div class="xs muted" style="margin-top:6px">Se excluyen quienes se dieron de baja${''} y quienes recibieron otra campaña hace pocos días (Antibaneo).</div>` : ''}`);
         } catch (e) { dibujar($('[data-aud]', m.el), html`<span style="color:var(--danger)">${e.message}</span>`); }
       }, 350);
       f.addEventListener('change', e => {
@@ -212,7 +240,20 @@ async function asistente(el, { ids } = {}) {
         if (/^v\d+$/.test(e.target.name)) { f[`f${e.target.name.slice(1)}`].classList.toggle('hidden', e.target.value !== 'fijo'); preview(); }
         if (!/^[vf]\d+$/.test(e.target.name) && e.target.name !== 'plantilla' && e.target.name !== 'etapa_destino') calcular();
       });
-      f.addEventListener('input', e => { if (/^f\d+$/.test(e.target.name)) preview(); if (['rubro', 'etiqueta', 'maximo'].includes(e.target.name)) calcular(); });
+      f.addEventListener('input', e => {
+        if (/^f\d+$/.test(e.target.name)) preview();
+        if (e.target.name === 'mensaje') previaTexto();
+        if (['rubro', 'etiqueta', 'maximo'].includes(e.target.name)) calcular();
+      });
+      if (modoTexto) f.addEventListener('click', e => {
+        const tag = e.target.closest('[data-tag]'), spin = e.target.closest('[data-spin]');
+        if (!tag && !spin) return;
+        const ta = f.mensaje, ini = ta.selectionStart ?? ta.value.length, fin = ta.selectionEnd ?? ini;
+        const sel = ta.value.slice(ini, fin);
+        const txt = tag ? `[${tag.dataset.tag}]` : (sel ? `{${sel}|}` : '{Hola|Buenas|Qué tal}');
+        ta.value = ta.value.slice(0, ini) + txt + ta.value.slice(fin);
+        ta.focus(); previaTexto();
+      });
       $('[data-cuando]', f).addEventListener('click', e => {
         const b = e.target.closest('[data-c]'); if (!b) return;
         cuando = b.dataset.c;
@@ -226,14 +267,22 @@ async function asistente(el, { ids } = {}) {
 
       $('[data-crear]', m.el).addEventListener('click', async e => {
         if (!f.nombre.value.trim()) { f.nombre.reportValidity(); return; }
-        const t = tpl(), mp = mapeo();
-        if (mp.some(v => !v.valor)) return toast('Completa todos los datos variables.', 'warning');
-        if (t.header === 'IMAGE' && !f.imagen.files[0]) return toast('Elige la imagen del encabezado.', 'warning');
-        if (cuando === 'ahora' && !(await confirmar('La campaña empezará a enviarse de inmediato (dentro del horario permitido).', { titulo: 'Enviar campaña', ok: 'Enviar' }))) return;
         const fd = new FormData();
         fd.append('nombre', f.nombre.value.trim());
-        fd.append('plantilla', `${t.nombre}|${t.idioma}`);
-        fd.append('variables', JSON.stringify(mp));
+        if (modoTexto) {
+          if (!f.mensaje.value.trim()) return toast('Escribe el mensaje.', 'warning');
+          fd.append('tipo', 'texto');
+          fd.append('mensaje', f.mensaje.value.trim());
+        } else {
+          const t = tpl(), mp = mapeo();
+          if (mp.some(v => !v.valor)) return toast('Completa todos los datos variables.', 'warning');
+          if (t.header === 'IMAGE' && !f.imagen.files[0]) return toast('Elige la imagen del encabezado.', 'warning');
+          fd.append('plantilla', `${t.nombre}|${t.idioma}`);
+          fd.append('variables', JSON.stringify(mp));
+        }
+        if (cuando === 'ahora' && !(await confirmar(modoTexto
+          ? 'La campaña empezará a enviarse por WhatsApp QR respetando las pausas, los límites y el calentamiento de Antibaneo.'
+          : 'La campaña empezará a enviarse de inmediato (dentro del horario permitido).', { titulo: 'Enviar campaña', ok: 'Enviar' }))) return;
         fd.append('filtros', JSON.stringify(filtros()));
         fd.append('etapa_destino', f.etapa_destino.value);
         if (cuando === 'programar') fd.append('programada_at', new Date(f.programada_at.value).toISOString());

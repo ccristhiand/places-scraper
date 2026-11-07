@@ -4,7 +4,8 @@ const db      = require('../db');
 const meta    = require('../meta');
 const { requirePerm } = require('../lib/auth');
 const { filtroContactos, asegurarAcceso } = require('../lib/filtros');
-const { enviarAContacto, ventanaAbierta } = require('../lib/mensajeria');
+const { enviarAContacto, ventanaAbierta, destinoDe } = require('../lib/mensajeria');
+const P = () => require('../wa/proveedor');
 const { upload } = require('../lib/uploads');
 const { ah, HttpError, texto } = require('../lib/utils');
 
@@ -26,7 +27,9 @@ router.get('/', requirePerm('chat.ver'), ah(async (req, res) => {
     GROUP BY n.id ${extra}
     ORDER BY ultimo_msg DESC
     LIMIT 200`, vals);
-  rows.forEach(r => { r.ventana_abierta = ventanaAbierta(r); r.no_leidos = Number(r.no_leidos || 0); });
+  // Con WhatsApp QR no existe la ventana de 24 h: siempre se puede escribir
+  const sinVentana = !(await require('../wa/proveedor').requiereVentana());
+  rows.forEach(r => { r.ventana_abierta = sinVentana || ventanaAbierta(r); r.no_leidos = Number(r.no_leidos || 0); });
   res.json({ ok: true, rows });
 }));
 
@@ -58,7 +61,7 @@ router.get('/:negocioId', requirePerm('chat.ver'), ah(async (req, res) => {
   const id = parseInt(req.params.negocioId, 10);
   await asegurarAcceso(req, id);
   const [[n]] = await db.query(`SELECT n.id, n.nombre, n.contacto_nombre, n.whatsapp, n.telefono, n.telefono_int, n.estado_crm,
-      n.ultimo_entrante_at, n.asignado_a, u.nombre AS asignado_nombre, n.distrito, n.email
+      n.ultimo_entrante_at, n.asignado_a, u.nombre AS asignado_nombre, n.distrito, n.email, n.wa_jid, n.no_contactar
     FROM negocios n LEFT JOIN usuarios u ON u.id = n.asignado_a WHERE n.id = ?`, [id]);
   const [msgs] = await db.query(`
     SELECT * FROM (
@@ -70,9 +73,13 @@ router.get('/:negocioId', requirePerm('chat.ver'), ah(async (req, res) => {
     "SELECT wa_id FROM chat_mensajes WHERE negocio_id = ? AND direccion = 'entrante' AND leido = 0 ORDER BY created_at DESC LIMIT 1", [id]);
   if (ultimoNoLeido) {
     await db.query("UPDATE chat_mensajes SET leido = 1 WHERE negocio_id = ? AND direccion = 'entrante' AND leido = 0", [id]);
-    if (ultimoNoLeido.wa_id && req.user.can('chat.enviar')) meta.marcarLeido(ultimoNoLeido.wa_id);
+    if (ultimoNoLeido.wa_id && req.user.can('chat.enviar')) {
+      const { destino } = await destinoDe(n);
+      if (destino) P().marcarLeido({ waId: ultimoNoLeido.wa_id, destino }).catch(() => {});
+    }
   }
-  n.ventana_abierta = ventanaAbierta(n);
+  n.proveedor = await P().activo();
+  n.ventana_abierta = n.proveedor === 'baileys' || ventanaAbierta(n);
   res.json({ ok: true, contacto: n, msgs });
 }));
 

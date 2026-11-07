@@ -61,7 +61,7 @@ async function cargarLista(el) {
       <div class="grow"><div class="row between"><span class="conv-name truncate">${c.nombre}</span><span class="xs muted nowrap">${fmt.relativo(c.ultimo_msg)}</span></div>
       <div class="row"><span class="conv-last truncate grow">${c.ultima_direccion === 'saliente' ? '↩ ' : ''}${c.ultimo_texto || ''}</span>
       ${c.no_leidos ? html`<span class="unread">${c.no_leidos}</span>` : ''}</div>
-      <div class="row xs muted" style="margin-top:2px">${c.ventana_abierta ? html`<span class="dot ok" style="width:6px;height:6px"></span> Ventana abierta` : ''}${c.asignado_nombre ? html` · ${c.asignado_nombre}` : ''}</div></div></a>`)}`
+      <div class="row xs muted" style="margin-top:2px">${c.ventana_abierta && c.proveedor !== 'baileys' ? html`<span class="dot ok" style="width:6px;height:6px"></span> Ventana abierta` : ''}${c.asignado_nombre ? html` · ${c.asignado_nombre}` : ''}</div></div></a>`)}`
       : vacio({ icono: 'chat', titulo: st.q || st.filtro ? 'Sin resultados' : 'Aún no hay conversaciones', texto: st.q || st.filtro ? '' : 'Cuando un contacto te escriba o le envíes una campaña, aparecerá aquí.' }));
   } catch (e) { toastError(e); }
 }
@@ -130,14 +130,16 @@ function pintarComposer(el) {
       <button class="btn btn-primary" data-act="plantilla">${icon('template', 'sm')} Enviar plantilla</button></div>`);
     return;
   }
+  const qr = c.proveedor === 'baileys';
   const restante = 24 * 3600e3 - (Date.now() - new Date(c.ultimo_entrante_at).getTime());
   dibujar(box, html`<div class="composer">
-    <div class="xs muted" style="margin-bottom:6px">${icon('clock', 'sm')} Ventana abierta · quedan ${Math.max(0, Math.floor(restante / 3600e3))} h ${Math.max(0, Math.floor((restante % 3600e3) / 60e3))} min</div>
+    ${qr ? html`<div class="xs muted" style="margin-bottom:6px">${icon('whatsapp', 'sm')} WhatsApp QR · escritura libre${c.no_contactar ? ' · este contacto pidió no recibir campañas' : ''}</div>`
+      : html`<div class="xs muted" style="margin-bottom:6px">${icon('clock', 'sm')} Ventana abierta · quedan ${Math.max(0, Math.floor(restante / 3600e3))} h ${Math.max(0, Math.floor((restante % 3600e3) / 60e3))} min</div>`}
     <form class="row" data-form style="position:relative;align-items:flex-end">
       <div class="quick-menu hidden" data-quick></div>
       <button type="button" class="btn btn-ghost btn-icon" data-act="menu-respuestas" title="Respuestas rápidas (escribe /)">${icon('zap')}</button>
       <button type="button" class="btn btn-ghost btn-icon" data-act="imagen" title="Enviar imagen">${icon('image')}</button>
-      <button type="button" class="btn btn-ghost btn-icon" data-act="plantilla" title="Plantilla">${icon('template')}</button>
+      ${qr ? '' : html`<button type="button" class="btn btn-ghost btn-icon" data-act="plantilla" title="Plantilla">${icon('template')}</button>`}
       <input type="file" accept="image/jpeg,image/png,image/webp" data-file hidden>
       <textarea class="input grow" name="texto" rows="1" placeholder="Escribe un mensaje… (Enter envía · Shift+Enter nueva línea · / respuestas rápidas)" maxlength="4096"></textarea>
       <button class="btn btn-success btn-icon" type="submit" aria-label="Enviar" style="height:44px;width:44px">${icon('send')}</button>

@@ -14,15 +14,26 @@ router.get('/', requirePerm('config.ver'), ah(async (req, res) => {
   res.json({
     ok: true,
     valores: await config.vistaPublica(),
-    definiciones: Object.fromEntries(Object.entries(config.DEFS).map(([k, d]) => [k, { grupo: d.grupo, label: d.label, tipo: d.tipo || 'text', min: d.min, max: d.max }])),
+    definiciones: Object.fromEntries(Object.entries(config.DEFS).map(([k, d]) => [k, { grupo: d.grupo, label: d.label, tipo: d.tipo || 'text', min: d.min, max: d.max, opciones: d.opciones }])),
     webhook_url: `${base}/api/webhook/meta`,
     leads_url: `${base}/api/leads`,
   });
 }));
 
 router.put('/', requirePerm('config.editar'), ah(async (req, res) => {
+  const anterior = await config.get('wa_proveedor');
   const cambiadas = await config.set(req.body.valores || {});
   await audit(req, 'config_editada', { detalle: cambiadas });
+
+  // Cambio de proveedor: solo uno queda conectado
+  const nuevo = await config.get('wa_proveedor');
+  if (nuevo !== anterior) {
+    const baileys = require('../wa/baileys');
+    if (nuevo === 'baileys') await baileys.iniciarSiCorresponde();
+    else await baileys.desconectar({ cerrarSesion: false }); // se conserva la sesión para volver sin escanear
+    await audit(req, 'whatsapp_proveedor', { detalle: `${anterior} → ${nuevo}` });
+    require('../lib/notificar').emitir('wa:proveedor', { proveedor: nuevo });
+  }
   res.json({ ok: true, cambiadas });
 }));
 

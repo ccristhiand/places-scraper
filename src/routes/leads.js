@@ -54,15 +54,14 @@ publico.post('/', limiter, express.json({ limit: '20kb' }), ah(async (req, res) 
   emitir('lead:nuevo', { id: r.insertId, nombre: lead.nombre, clinica: lead.clinica, plan: lead.plan });
   await notificarPermiso('leads.ver', { tipo: 'lead', titulo: `Nuevo lead: ${lead.clinica}`, cuerpo: `${lead.nombre} · ${lead.plan}`, enlace: '#/leads' });
 
-  // Alerta por WhatsApp con la plantilla del sistema "crm_alerta_lead" (si Meta la aprobó)
+  // Alerta por WhatsApp: plantilla "crm_alerta_lead" con Meta, o texto con WhatsApp Web
   const num = limpiarNumero(await config.get('leads_alerta_numero'), await config.get('empresa_codigo_pais'));
   if (num) {
-    const p = await require('../lib/plantillas').aprobadaPara('alerta_lead').catch(() => null);
-    if (p) {
-      const valores = { lead: lead.nombre, empresa_lead: lead.clinica, whatsapp: lead.whatsapp, plan: lead.plan };
-      meta.enviarPlantilla(num, p.nombre_meta, p.idioma, p.variables.map(k => valores[k] || '-'))
-        .catch(e => console.error('Alerta lead WA:', e.message));
-    }
+    const valores = { lead: lead.nombre, empresa_lead: lead.clinica, whatsapp: lead.whatsapp, plan: lead.plan };
+    const m = await require('../lib/plantillas').mensajeSistema('alerta_lead', valores).catch(() => null);
+    const P = require('../wa/proveedor');
+    if (m?.texto) P.enviarTexto(num, m.texto, { escritura: false }).catch(e => console.error('Alerta lead WA:', e.message));
+    else if (m?.plantilla) P.enviarPlantilla(num, m.plantilla).catch(e => console.error('Alerta lead WA:', e.message));
   }
   res.json({ ok: true, id: r.insertId });
 }));

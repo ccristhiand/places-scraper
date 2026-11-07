@@ -138,6 +138,8 @@ io.on('connection', socket => {
     process.exit(1);
   }
   require('./scheduler').iniciar();
+  // WhatsApp QR: reconecta si es el proveedor activo y hay sesión guardada
+  require('./wa/baileys').iniciarSiCorresponde().catch(e => console.error('WhatsApp QR:', e.message));
   server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`🚀 CRM corriendo en http://localhost:${PORT}`);
   });

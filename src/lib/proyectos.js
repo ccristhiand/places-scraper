@@ -50,16 +50,15 @@ const fechaLarga = iso => new Date(`${iso}T12:00:00`).toLocaleDateString('es-PE'
 // Aviso al cliente por WhatsApp con una plantilla del sistema (si está aprobada). Nunca lanza.
 async function avisarCliente(p, uso, valores) {
   try {
-    const plantilla = await require('./plantillas').aprobadaPara(uso);
-    if (!plantilla) {
+    const [[n]] = await db.query('SELECT * FROM negocios WHERE id = ?', [p.negocio_id]);
+    const v = { contacto: n.contacto_nombre || n.nombre, proyecto: p.nombre, ...valores };
+    // Meta: plantilla aprobada · WhatsApp Web: texto estándar con los datos
+    const m = await require('./plantillas').mensajeSistema(uso, v);
+    if (!m) {
       await registrarHistorial(p, `Aviso por WhatsApp no enviado: la plantilla "${uso}" no está aprobada (WhatsApp → Recordatorios)`);
       return false;
     }
-    const [[n]] = await db.query('SELECT * FROM negocios WHERE id = ?', [p.negocio_id]);
-    const v = { contacto: n.contacto_nombre || n.nombre, proyecto: p.nombre, ...valores };
-    await require('./mensajeria').enviarAContacto(n, { plantilla: {
-      nombre: plantilla.nombre_meta, idioma: plantilla.idioma, params: plantilla.variables.map(k => v[k] ?? '-'), cuerpo: plantilla.cuerpo,
-    } }, { origen: 'proyecto' });
+    await require('./mensajeria').enviarAContacto(n, m, { origen: 'proyecto', exigirVentana: false });
     await registrarHistorial(p, `Aviso enviado al cliente por WhatsApp (${uso === 'proyecto_cuota' ? 'cuota por vencer' : 'entrega'})`);
     return true;
   } catch (e) {

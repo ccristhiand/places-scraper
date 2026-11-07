@@ -206,7 +206,24 @@ async function aprobadaPara(uso) {
   return f;
 }
 
+/**
+ * Mensaje de un aviso del sistema listo para enviar con el proveedor activo:
+ *  - Meta: { plantilla } con la plantilla aprobada (null si aún no está aprobada)
+ *  - WhatsApp Web: { texto } con el texto estándar y los datos reemplazados
+ */
+async function mensajeSistema(uso, valores) {
+  if ((await require('../wa/proveedor').activo()) === 'baileys') {
+    const s = SISTEMA.find(x => x.uso === uso);
+    if (!s) return null;
+    const empresa = (await config.get('empresa_nombre')) || 'nuestra empresa';
+    return { texto: s.texto.replace(/\[empresa\]/gi, empresa).replace(/\[([a-z_]+)\]/gi, (m, k) => String(valores[k.toLowerCase()] ?? '')) };
+  }
+  const p = await aprobadaPara(uso);
+  if (!p) return null;
+  return { plantilla: { nombre: p.nombre_meta, idioma: p.idioma, params: p.variables.map(k => valores[k] ?? '-'), cuerpo: p.cuerpo } };
+}
+
 module.exports = {
   ESTADO_DESDE_META, EJEMPLOS, SISTEMA, validarPlantilla, convertirEtiquetas, crear, eliminar,
-  sincronizar, listar, estadoSistema, crearSistema, aprobadaPara,
+  sincronizar, listar, estadoSistema, crearSistema, aprobadaPara, mensajeSistema,
 };

@@ -37,11 +37,49 @@ async function urlPublica(req) {
   return conf || `${req.protocol}://${req.get('host')}`;
 }
 
+// ── WhatsApp Web por QR (Baileys) ─────────────────────────────────────────
+const baileys = require('../wa/baileys');
+const proveedor = require('../wa/proveedor');
+
+async function estadoQR() {
+  const queue = require('../queue');
+  const [lim, hoy, hora] = await Promise.all([queue.limites(), queue.enviadosHoy(), queue.enviadosDesde('NOW() - INTERVAL 1 HOUR')]);
+  return { ...baileys.vista(), sesion_guardada: baileys.haySesion(), limites: lim, enviados_hoy: hoy, enviados_hora: hora, lote: queue.getEstado().lote };
+}
+
+router.get('/qr/estado', requirePerm('config.ver', 'chat.ver', 'campanas.ver'), ah(async (req, res) => {
+  res.json({ ok: true, proveedor: await proveedor.activo(), qr: await estadoQR() });
+}));
+
+router.post('/qr/conectar', requirePerm('config.editar'), ah(async (req, res) => {
+  if ((await proveedor.activo()) !== 'baileys') throw new HttpError(409, 'Primero activa "WhatsApp QR" como proveedor en Configuración → WhatsApp.');
+  const telefono = req.body?.telefono ? String(req.body.telefono).replace(/\D/g, '') : null;
+  if (telefono && !/^\d{10,15}$/.test(telefono)) throw new HttpError(422, 'Escribe el número con código de país, sin espacios (ej. 51987654321).');
+  await baileys.conectar({ telefono });
+  await audit(req, 'whatsapp_qr_conectar', { detalle: telefono ? 'con código' : 'con QR' });
+  res.json({ ok: true, qr: await estadoQR() });
+}));
+
+router.post('/qr/desconectar', requirePerm('config.editar'), ah(async (req, res) => {
+  // cerrar_sesion = true desvincula el dispositivo (hay que volver a escanear)
+  await baileys.desconectar({ cerrarSesion: req.body?.cerrar_sesion !== false });
+  await audit(req, 'whatsapp_qr_desconectar', { detalle: req.body?.cerrar_sesion === false ? 'pausa' : 'sesión cerrada' });
+  res.json({ ok: true, qr: await estadoQR() });
+}));
+
+router.post('/qr/reiniciar-calentamiento', requirePerm('config.editar'), ah(async (req, res) => {
+  await db.query("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('baileys_desde', ?, 'Interno') ON DUPLICATE KEY UPDATE valor = VALUES(valor)",
+    [new Date().toISOString().slice(0, 10)]);
+  await audit(req, 'whatsapp_qr_calentamiento');
+  res.json({ ok: true, qr: await estadoQR() });
+}));
+
 router.get('/estado', requirePerm('config.ver', 'chat.ver', 'campanas.ver'), ah(async (req, res) => {
   const [c, app] = await Promise.all([meta.cuenta(), meta.app()]);
   const base = await urlPublica(req);
   res.json({
     ok: true,
+    proveedor: await proveedor.activo(),
     cuenta: vistaCuenta(c),
     plataforma: {
       lista: app.lista,

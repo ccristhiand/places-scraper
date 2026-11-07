@@ -5,7 +5,7 @@ import { abrirContacto } from '../contacto.js';
 const LIM = 25;
 let st;
 
-const WA = [['', 'WhatsApp: todos'], ['aptos', 'Con número apto'], ['wa_ok', 'WhatsApp activo'], ['no_wa', 'Sin WhatsApp'], ['sin_numero', 'Sin número'], ['ventana', 'Ventana 24 h abierta']];
+const WA = [['', 'WhatsApp: todos'], ['aptos', 'Con número apto'], ['wa_ok', 'WhatsApp activo'], ['no_wa', 'Sin WhatsApp'], ['sin_numero', 'Sin número'], ['ventana', 'Ventana 24 h abierta'], ['baja', 'Dados de baja']];
 
 export async function render(el, params) {
   st = { f: { sort: 'created_at', dir: 'desc' }, offset: 0, sel: new Set(), total: 0 };
@@ -115,7 +115,7 @@ async function cargar(el) {
           <td class="w-check" data-act="noop"><input type="checkbox" data-sel="${c.id}" ${st.sel.has(c.id) ? raw('checked') : ''} aria-label="Seleccionar"></td>
           <td style="min-width:220px"><div class="strong">${c.nombre}</div><div class="xs muted">${[c.contacto_nombre, c.rubro_busqueda].filter(Boolean).join(' · ')}${c.etiquetas ? html` ${c.etiquetas.split(',').slice(0, 3).map(t => html`<span class="tag">${t}</span> `)}` : ''}</div></td>
           <td class="nowrap">${wa ? html`<a href="${enlaceWa(wa)}" target="_blank" rel="noopener noreferrer" data-act="noop">${wa}</a>` : html`<span class="muted">${c.telefono || '—'}</span>`}
-            ${c.wa_verificado === 0 ? html` <span class="badge danger" title="El número no tiene WhatsApp">sin WA</span>` : ''}</td>
+            ${c.wa_verificado === 0 ? html` <span class="badge danger" title="El número no tiene WhatsApp">sin WA</span>` : ''}${c.no_contactar ? html` <span class="badge warning" title="Pidió no recibir mensajes: excluido de las campañas">baja</span>` : ''}</td>
           <td class="small">${c.distrito || '—'}<div class="xs muted">${c.provincia || ''}</div></td>
           <td>${etapaBadge(c.estado_crm)}</td>
           <td class="small hide-mobile">${c.asignado_nombre || html`<span class="muted">—</span>`}</td>

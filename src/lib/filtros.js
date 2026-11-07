@@ -37,6 +37,7 @@ function filtroContactos(q = {}, req, a = 'n') {
     case 'no_wa':      w.push(`${c('wa_verificado')} = 0`); break;
     case 'aptos':      w.push(`${conNumero} AND (${c('wa_verificado')} IS NULL OR ${c('wa_verificado')} = 1)`); break;
     case 'ventana':    w.push(`${c('ultimo_entrante_at')} > NOW() - INTERVAL 24 HOUR`); break;
+    case 'baja':       w.push(`${c('no_contactar')} = 1`); break;
   }
 
   // Alcance: sin "ver_todos" solo se ven los contactos propios
