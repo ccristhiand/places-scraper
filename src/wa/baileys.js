@@ -124,7 +124,9 @@ async function conectar({ telefono } = {}) {
       } else if (codigo === R.restartRequired) {
         intentos = 0;
         setTimeout(() => conectar().catch(e => log(e.message)), 1000);
-      } else if (!state.creds.registered && intentos >= 4) {
+      } else if (!state.creds.me?.id && !state.creds.registered && intentos >= 4) {
+        // Sin sesión vinculada (QR nunca escaneado). Ojo: con QR Baileys deja registered = false
+        // aunque la sesión sea válida; por eso se mira creds.me, que sí existe tras escanear.
         Object.assign(st, { estado: 'desconectado', qr: null, codigo: null, ultimoError: 'El código QR expiró sin escanearse. Pulsa Conectar para generar otro.' });
         detenido = true;
       } else {
