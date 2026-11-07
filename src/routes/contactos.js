@@ -50,6 +50,49 @@ router.get('/facetas', requirePerm('contactos.ver'), ah(async (req, res) => {
   res.json({ ok: true, rubros, etiquetas: [...set.entries()].sort((a, b) => b[1] - a[1]).map(([v, n]) => ({ v, n })) });
 }));
 
+// ── Carga masiva desde Excel ──────────────────────────────────────────────
+const multer = require('multer');
+const importacion = require('../lib/importacion');
+const subirExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (/\.xlsx$/i.test(file.originalname || '')) return cb(null, true);
+    const err = new Error(/\.(xls|csv|ods)$/i.test(file.originalname || '')
+      ? 'Ese formato no se acepta: abre el archivo en Excel y guárdalo como "Libro de Excel (.xlsx)".'
+      : 'Sube un archivo de Excel (.xlsx).');
+    err.status = 400; cb(err);
+  },
+});
+const xlsx = (res, nombre, buf) => {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+  res.send(Buffer.from(buf));
+};
+
+router.get('/importar/plantilla', requirePerm('contactos.crear'), ah(async (req, res) => {
+  const [etapas] = await db.query('SELECT clave, nombre FROM etapas ORDER BY orden');
+  const [usuarios] = await db.query('SELECT id, nombre, email FROM usuarios WHERE activo = 1 ORDER BY nombre');
+  xlsx(res, 'plantilla-contactos.xlsx', await importacion.plantilla({ etapas, usuarios }));
+}));
+
+router.post('/importar/analizar', requirePerm('contactos.crear'), subirExcel.single('archivo'), ah(async (req, res) => {
+  if (!req.file) throw new HttpError(400, 'Elige el archivo de Excel.');
+  const archivo = String(req.file.originalname || 'archivo.xlsx').replace(/[^\w.\- ()áéíóúñÁÉÍÓÚÑ]/g, '').slice(0, 120);
+  res.json({ ok: true, ...(await importacion.analizar(req.file.buffer, { usuario: req.user, archivo })) });
+}));
+
+router.get('/importar/:token/pendientes.xlsx', requirePerm('contactos.crear'), ah(async (req, res) => {
+  xlsx(res, 'contactos-por-corregir.xlsx', await importacion.excelPendientes(req.params.token, req.user));
+}));
+
+router.post('/importar/confirmar', requirePerm('contactos.crear'), ah(async (req, res) => {
+  const b = req.body || {};
+  const r = await importacion.importar(b.token, req.user, { duplicados: b.duplicados, etapa: b.etapa, asignado_a: b.asignado_a, etiqueta: b.etiqueta });
+  await audit(req, 'contactos_importados', { entidad: 'contacto', detalle: r });
+  res.json({ ok: true, ...r });
+}));
+
 router.get('/export.csv', requirePerm('contactos.exportar'), ah(async (req, res) => {
   const { where, vals } = filtroContactos(req.query, req);
   const [rows] = await db.query(`${SELECT} WHERE ${where} ORDER BY n.id LIMIT 50000`, vals);

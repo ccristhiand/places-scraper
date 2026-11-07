@@ -1,4 +1,5 @@
 import { html, raw, icon, api, render as dibujar, acciones, fmt, can, vacio, toast, toastError, confirmar, etapas, etapaBadge, usuarios, opciones, debounce, $, $$, qs, cargando, menu, formModal } from '../core.js';
+import { importarContactos } from '../importar.js';
 import { pager, camposUbigeo, enlazarUbigeo, formContacto, enlaceWa } from '../ui.js';
 import { abrirContacto } from '../contacto.js';
 
@@ -16,6 +17,7 @@ export async function render(el, params) {
       <div class="actions">
         ${can('contactos.exportar') ? html`<button class="btn" data-act="exportar">${icon('download', 'sm')} Exportar CSV</button>` : ''}
         ${can('prospeccion.buscar') ? html`<a class="btn" href="#/prospeccion">${icon('search', 'sm')} Prospectar</a>` : ''}
+        ${can('contactos.crear') ? html`<button class="btn" data-act="importar">${icon('upload', 'sm')} Importar Excel</button>` : ''}
         ${can('contactos.crear') ? html`<button class="btn btn-primary" data-act="nuevo">${icon('plus', 'sm')} Nuevo contacto</button>` : ''}
       </div></div>
     <div class="toolbar" data-filtros>
@@ -29,7 +31,7 @@ export async function render(el, params) {
       ${camposUbigeo()}
       <input class="input" name="rubro" placeholder="Rubro">
       <input class="input" name="etiqueta" placeholder="Etiqueta">
-      <select class="select" name="origen">${opciones([['google', 'Google Places'], ['manual', 'Manual'], ['whatsapp', 'WhatsApp entrante'], ['lead', 'Lead web']], '', { vacio: 'Cualquier origen' })}</select>
+      <select class="select" name="origen">${opciones([['google', 'Google Places'], ['manual', 'Manual'], ['whatsapp', 'WhatsApp entrante'], ['lead', 'Lead web'], ['importacion', 'Importado de Excel']], '', { vacio: 'Cualquier origen' })}</select>
       <button class="btn btn-ghost" data-act="limpiar">Limpiar filtros</button>
     </div>
     <div data-bulk></div>
@@ -50,6 +52,7 @@ export async function render(el, params) {
 
   acciones(el, {
     nuevo: async () => { if (await formContacto(null, { onGuardado: id => abrirContacto(id, { onCambio: () => cargar(el) }) })) { toast('Contacto creado'); cargar(el); } },
+    importar: () => importarContactos({ onFin: () => cargar(el) }),
     exportar: () => { location.href = `/api/contactos/export.csv?${qs(st.f)}`; },
     'mas-filtros': () => extra.classList.toggle('hidden'),
     limpiar: () => { $$('input,select', extra).forEach(i => { i.value = ''; }); $$('input,select', filtros).forEach(i => { i.value = ''; }); leer(); },
