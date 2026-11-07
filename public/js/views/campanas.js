@@ -19,6 +19,7 @@ export async function render(el, params) {
     <div class="card" data-lista>${cargando()}</div>`);
   acciones(el, {
     nueva: () => asistente(el),
+    editar: b => asistente(el, { campana: st.rows.find(c => c.id === +b.dataset.id) }),
     accion: async b => {
       const a = b.dataset.a;
       if (a === 'cancelar' && !(await confirmar('Los mensajes que aún no se enviaron no se enviarán.', { titulo: 'Cancelar campaña', ok: 'Cancelar campaña', peligro: true }))) return;
@@ -77,6 +78,7 @@ function fila(c) {
     <td class="small num">${fmt.pct(c.entregados, c.enviados)}</td>
     <td class="small num">${fmt.pct(c.leidos, c.enviados)}</td>
     <td class="actions"><div class="row" style="justify-content:flex-end">
+      ${can('campanas.gestionar') && !legado && ['borrador', 'programada'].includes(c.estado) && !Number(c.contactos_cargados) ? html`<button class="btn btn-xs" data-act="editar" data-id="${c.id}">${icon('edit', 'sm')} Editar</button>` : ''}
       ${ej && c.estado === 'borrador' ? btn('iniciar', 'Iniciar', 'btn-success') : ''}
       ${ej && ['enviando', 'programada'].includes(c.estado) ? btn('pausar', 'Pausar') : ''}
       ${ej && c.estado === 'pausada' ? btn('reanudar', 'Reanudar', 'btn-success') : ''}
@@ -119,9 +121,14 @@ function detalle(c) {
 }
 
 // ── Asistente: plantilla → datos → audiencia → cuándo ──────────────────────
-async function asistente(el, { ids } = {}) {
+async function asistente(el, { ids, campana } = {}) {
+  // Edición: el formulario arranca con los datos guardados de la campaña
+  const ed = campana || null;
+  const fil = ed?.filtros || {};
+  if (ed && Array.isArray(fil.ids) && fil.ids.length) ids = fil.ids;
   // Con WhatsApp QR las campañas son de texto libre; con Meta, de plantilla aprobada
-  const modoTexto = session.proveedor === 'baileys';
+  const modoTexto = ed ? ed.tipo === 'texto' : session.proveedor === 'baileys';
+  if (ed && modoTexto && session.proveedor !== 'baileys') toast('Esta campaña es de texto libre: solo podrá enviarse con WhatsApp QR activo (Configuración → WhatsApp).', 'warning', 7000);
   try {
     if (!st.variables) st.variables = (await api.get('/api/campanas/variables')).variables;
     if (!modoTexto && !st.plantillas) st.plantillas = (await api.get('/api/whatsapp/plantillas')).rows;
@@ -134,48 +141,55 @@ async function asistente(el, { ids } = {}) {
   }
   const [ets, us] = await Promise.all([etapas(), can('contactos.ver_todos') ? usuarios() : []]);
   const vars = Object.entries(st.variables);
+  // Plantilla guardada en la campaña (por nombre e idioma)
+  const tplIni = ed && !modoTexto ? Math.max(0, aprobadas.findIndex(t => t.nombre === (ed.template_nombre || ed.plantilla) && (!ed.plantilla_idioma || t.idioma === ed.plantilla_idioma))) : 0;
+  const cuandoIni = ed ? (ed.estado === 'programada' ? 'programar' : 'borrador') : 'ahora';
+  const sel = (a, b) => (String(a ?? '') === String(b ?? '') ? raw('selected') : '');
+  const imgActual = ed?.imagen_url ? html`<div class="row small" style="margin-top:6px"><img src="${ed.imagen_url}" alt="" style="height:44px;border-radius:4px">
+    <span class="muted">Imagen actual (elige otra para reemplazarla)</span><label class="check right"><input type="checkbox" name="quitar_imagen"> Quitar</label></div>` : '';
 
   modal({
-    title: 'Nueva campaña', subtitle: ids ? `${ids.length} contactos seleccionados desde Contactos` : null, size: 'lg',
+    title: ed ? 'Editar campaña' : 'Nueva campaña', subtitle: ids ? `${ids.length} contactos seleccionados desde Contactos` : null, size: 'lg',
     body: html`<form class="stack" data-f novalidate>
-      <label class="field"><span>Nombre de la campaña *</span><input class="input" name="nombre" required maxlength="150" placeholder="Ej. Promoción noviembre — ferreterías Lima sur"></label>
+      <label class="field"><span>Nombre de la campaña *</span><input class="input" name="nombre" required maxlength="150" value="${ed?.nombre || ''}" placeholder="Ej. Promoción noviembre — ferreterías Lima sur"></label>
       <div class="divider" style="margin:4px 0"></div>
       ${modoTexto ? html`
       <div class="label">1. Mensaje <span class="xs muted" style="font-weight:400">· WhatsApp QR</span></div>
-      <textarea class="input" name="mensaje" rows="7" maxlength="4096" placeholder="{Hola|Buenas|Qué tal} [contacto] 👋 ¿hablo con *[nombre]*?&#10;&#10;Te escribo porque…"></textarea>
+      <textarea class="input" name="mensaje" rows="7" maxlength="4096" placeholder="{Hola|Buenas|Qué tal} [contacto] 👋 ¿hablo con *[nombre]*?&#10;&#10;Te escribo porque…">${ed?.mensaje || ''}</textarea>
       <div class="row wrap"><span class="xs muted">Insertar:</span>${vars.filter(([k]) => k !== 'telefono').map(([k, t]) => html`<button type="button" class="tag" data-tag="${k}" title="${t}" style="cursor:pointer">[${k}]</button>`)}
         <button type="button" class="tag" data-spin style="cursor:pointer" title="Cada contacto recibe una de las opciones al azar">{variación|otra}</button></div>
-      <div class="field" data-img><span>Imagen (opcional)</span><input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="input" style="padding:5px"><span class="hint">Se envía con el mensaje como pie de foto.</span></div>
+      <div class="field" data-img><span>Imagen (opcional)</span><input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="input" style="padding:5px"><span class="hint">Se envía con el mensaje como pie de foto.</span>${imgActual}</div>
       <div><div class="label" style="margin-bottom:6px">Así lo recibirán (3 ejemplos al azar)</div><div class="stack sm" data-prevs></div><ul class="reqs" data-avisos></ul></div>`
       : html`
       <div class="label">1. Plantilla</div>
-      <select class="select" name="plantilla">${aprobadas.map((t, i) => html`<option value="${i}">${t.nombre} · ${t.idioma} · ${{ MARKETING: 'Marketing', UTILITY: 'Utilidad' }[t.categoria] || t.categoria}</option>`)}</select>
+      <select class="select" name="plantilla">${aprobadas.map((t, i) => html`<option value="${i}" ${sel(i, tplIni)}>${t.nombre} · ${t.idioma} · ${{ MARKETING: 'Marketing', UTILITY: 'Utilidad' }[t.categoria] || t.categoria}</option>`)}</select>
       <div data-vars></div>
-      <div class="field hidden" data-img><span>Imagen del encabezado *</span><input type="file" name="imagen" accept="image/jpeg,image/png" class="input" style="padding:5px"><span class="hint">JPG o PNG, máx. 5 MB.</span></div>
+      <div class="field hidden" data-img><span>Imagen del encabezado *</span><input type="file" name="imagen" accept="image/jpeg,image/png" class="input" style="padding:5px"><span class="hint">JPG o PNG, máx. 5 MB.</span>${imgActual}</div>
       <div><div class="label" style="margin-bottom:6px">Vista previa</div><div class="bubble out" style="max-width:100%" data-prev></div></div>`}
       <div class="divider" style="margin:4px 0"></div>
       <div class="label">2. ¿A quién?</div>
       ${ids ? html`<p class="small muted">${ids.length} contactos elegidos en la lista de Contactos.</p>` : html`<div class="form-grid">
-        <select class="select" name="etapa">${opciones(ets.map(e => [e.clave, e.nombre]), '', { vacio: 'Cualquier etapa' })}</select>
-        <select class="select" name="wa">${opciones([['aptos', 'Con número apto para WhatsApp'], ['wa_ok', 'Solo WhatsApp confirmado']], 'aptos')}</select>
-        ${camposUbigeo({}, { vacio: 'Todos' })}
-        <input class="input" name="rubro" placeholder="Rubro (opcional)">
-        <input class="input" name="etiqueta" placeholder="Etiqueta (opcional)">
-        ${us.length ? html`<select class="select" name="asignado">${opciones([['yo', 'Mis contactos'], ['sin', 'Sin asignar'], ...us.map(u => [u.id, u.nombre])], '', { vacio: 'De todos los vendedores' })}</select>` : ''}
-        <label class="field"><span class="xs muted">Máximo de mensajes</span><input class="input" type="number" name="maximo" min="1" max="20000" value="1000"></label>
+        <select class="select" name="etapa">${opciones(ets.map(e => [e.clave, e.nombre]), fil.etapa || '', { vacio: 'Cualquier etapa' })}</select>
+        <select class="select" name="wa">${opciones([['aptos', 'Con número apto para WhatsApp'], ['wa_ok', 'Solo WhatsApp confirmado']], fil.wa || 'aptos')}</select>
+        ${camposUbigeo({ departamento: fil.dep, provincia: fil.prov, distrito: fil.dist }, { vacio: 'Todos' })}
+        <input class="input" name="rubro" placeholder="Rubro (opcional)" value="${fil.rubro || ''}">
+        <input class="input" name="etiqueta" placeholder="Etiqueta (opcional)" value="${fil.etiqueta || ''}">
+        ${us.length ? html`<select class="select" name="asignado">${opciones([['yo', 'Mis contactos'], ['sin', 'Sin asignar'], ...us.map(u => [u.id, u.nombre])], fil.asignado ?? '', { vacio: 'De todos los vendedores' })}</select>` : ''}
+        <label class="field"><span class="xs muted">Máximo de mensajes</span><input class="input" type="number" name="maximo" min="1" max="20000" value="${fil.maximo || 1000}"></label>
       </div>`}
       <div class="card"><div class="card-body small" data-aud>${cargando('Calculando…')}</div></div>
-      <label class="field"><span>Después de enviar, mover el contacto a</span><select class="select" name="etapa_destino">${opciones([['sin_cambio', 'No cambiar la etapa'], ...ets.map(e => [e.clave, e.nombre])], 'sin_cambio')}</select></label>
+      <label class="field"><span>Después de enviar, mover el contacto a</span><select class="select" name="etapa_destino">${opciones([['sin_cambio', 'No cambiar la etapa'], ...ets.map(e => [e.clave, e.nombre])], ed?.etapa_destino || 'sin_cambio')}</select></label>
       <div class="divider" style="margin:4px 0"></div>
       <div class="label">3. ¿Cuándo?</div>
-      <div class="seg" data-cuando><button type="button" class="active" data-c="ahora">Enviar ahora</button><button type="button" data-c="programar">Programar</button><button type="button" data-c="borrador">Guardar como borrador</button></div>
-      <input class="input hidden" type="datetime-local" name="programada_at" value="${inputFecha(new Date(Date.now() + 3600e3))}">
+      <div class="seg" data-cuando>${[['ahora', 'Enviar ahora'], ['programar', 'Programar'], ['borrador', 'Guardar como borrador']].map(([k, t]) => html`<button type="button" class="${k === cuandoIni ? 'active' : ''}" data-c="${k}">${t}</button>`)}</div>
+      <input class="input ${cuandoIni === 'programar' ? '' : 'hidden'}" type="datetime-local" name="programada_at" value="${inputFecha(ed?.programada_at ? new Date(ed.programada_at) : new Date(Date.now() + 3600e3))}">
       <p class="xs muted">Se envía dentro del horario y el límite diario de Configuración → Envíos masivos. Se excluyen los números sin WhatsApp y quienes ya recibieron esta campaña.</p>
     </form>`,
     foot: html`<button class="btn" data-close>Cancelar</button><button class="btn btn-primary" data-crear>Crear campaña</button>`,
     onMount: async m => {
       const f = $('[data-f]', m.el);
-      let cuando = 'ahora';
+      let cuando = cuandoIni;
+      let varsGuardadas = ed && !modoTexto ? (ed.meta_variables || []) : null; // solo para la plantilla original
       const tpl = () => aprobadas[+f.plantilla.value];
       // Modo texto: vista previa real (datos de un contacto + variaciones) y avisos de riesgo
       const previaTexto = debounce(async () => {
@@ -196,12 +210,14 @@ async function asistente(el, { ids } = {}) {
         if (modoTexto) return previaTexto();
         const t = tpl();
         const nombres = t.variables_nombres || [];
+        const guardadas = varsGuardadas; varsGuardadas = null;
         dibujar($('[data-vars]', f), t.variables ? html`<div class="small muted" style="margin:4px 0 8px">Qué va en cada dato variable:</div>
           <div class="form-grid">${Array.from({ length: t.variables }, (_, i) => {
-            const pre = nombres[i] && st.variables[nombres[i]] ? nombres[i] : (i === 0 ? 'contacto' : '');
+            const g = guardadas?.[i];
+            const pre = g ? (g.tipo === 'dato' ? g.valor : '') : nombres[i] && st.variables[nombres[i]] ? nombres[i] : (i === 0 ? 'contacto' : '');
             return html`<label class="field"><span class="mono xs">{{${i + 1}}}</span><div class="row">
               <select class="select" name="v${i}">${vars.map(([k, txt]) => html`<option value="dato:${k}" ${pre === k ? raw('selected') : ''}>${txt}</option>`)}<option value="fijo" ${pre ? '' : raw('selected')}>Texto fijo…</option></select>
-              <input class="input ${pre ? 'hidden' : ''}" name="f${i}" placeholder="Texto fijo" maxlength="200"></div></label>`;
+              <input class="input ${pre ? 'hidden' : ''}" name="f${i}" placeholder="Texto fijo" maxlength="200" value="${g?.tipo === 'fijo' ? g.valor : ''}"></div></label>`;
           })}</div>` : html`<p class="xs muted">Esta plantilla no tiene datos variables.</p>`);
         $('[data-img]', f).classList.toggle('hidden', t.header !== 'IMAGE');
         preview();
@@ -259,9 +275,12 @@ async function asistente(el, { ids } = {}) {
         cuando = b.dataset.c;
         $$('[data-c]', f).forEach(x => x.classList.toggle('active', x === b));
         f.programada_at.classList.toggle('hidden', cuando !== 'programar');
-        $('[data-crear]', m.el).textContent = { ahora: 'Crear y enviar', programar: 'Programar campaña', borrador: 'Guardar borrador' }[cuando];
+        textoBoton();
       });
-      $('[data-crear]', m.el).textContent = 'Crear y enviar';
+      const textoBoton = () => { $('[data-crear]', m.el).textContent = (ed
+        ? { ahora: 'Guardar y enviar', programar: 'Guardar y programar', borrador: 'Guardar cambios' }
+        : { ahora: 'Crear y enviar', programar: 'Programar campaña', borrador: 'Guardar borrador' })[cuando]; };
+      textoBoton();
       if (!ids) await enlazarUbigeo(f, calcular);
       pintarVars(); calcular();
 
@@ -276,7 +295,8 @@ async function asistente(el, { ids } = {}) {
         } else {
           const t = tpl(), mp = mapeo();
           if (mp.some(v => !v.valor)) return toast('Completa todos los datos variables.', 'warning');
-          if (t.header === 'IMAGE' && !f.imagen.files[0]) return toast('Elige la imagen del encabezado.', 'warning');
+          const conImagen = f.imagen.files[0] || (ed?.imagen_url && !f.quitar_imagen?.checked);
+          if (t.header === 'IMAGE' && !conImagen) return toast('Elige la imagen del encabezado.', 'warning');
           fd.append('plantilla', `${t.nombre}|${t.idioma}`);
           fd.append('variables', JSON.stringify(mp));
         }
@@ -288,10 +308,11 @@ async function asistente(el, { ids } = {}) {
         if (cuando === 'programar') fd.append('programada_at', new Date(f.programada_at.value).toISOString());
         if (cuando === 'ahora') fd.append('iniciar', '1');
         if (f.imagen.files[0]) fd.append('imagen', f.imagen.files[0]);
+        else if (f.quitar_imagen?.checked) fd.append('quitar_imagen', '1');
         await conCarga(e.currentTarget, async () => {
           try {
-            const r = await api.form('POST', '/api/campanas', fd);
-            toast({ enviando: 'Campaña en marcha', programada: 'Campaña programada', borrador: 'Campaña guardada como borrador' }[r.estado] || 'Campaña creada');
+            const r = ed ? await api.form('PUT', `/api/campanas/${ed.id}`, fd) : await api.form('POST', '/api/campanas', fd);
+            toast({ enviando: 'Campaña en marcha', programada: 'Campaña programada', borrador: ed ? 'Cambios guardados' : 'Campaña guardada como borrador' }[r.estado] || 'Campaña guardada');
             m.close(true); cargar(el);
           } catch (ex) { toastError(ex); }
         });

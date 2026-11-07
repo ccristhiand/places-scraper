@@ -72,7 +72,7 @@ router.post('/audiencia', requirePerm('envios.ejecutar', 'campanas.gestionar'), 
 }));
 
 // Campaña de texto libre (solo WhatsApp QR): [dato] del contacto y variaciones {a|b|c}
-async function crearCampanaTexto(req, b, { nombre, filtros, programada, destino }) {
+async function validarTexto(b) {
   if ((await require('../wa/proveedor').activo()) !== 'baileys')
     throw new HttpError(422, 'Las campañas de texto libre solo funcionan con WhatsApp QR. Con la API de Meta usa una plantilla aprobada.');
   const mensaje = texto(b.mensaje, 4096);
@@ -84,53 +84,11 @@ async function crearCampanaTexto(req, b, { nombre, filtros, programada, destino 
   // Mensajes idénticos para todos son la señal más fuerte de spam
   if (await config.getBool('ab_exigir_variacion') && !/\[[a-z_]+\]|\{\{\s*\w+\s*\}\}|\{[^{}]*\|[^{}]*\}/i.test(mensaje))
     throw new HttpError(422, 'Para reducir el riesgo de bloqueo, el mensaje debe variar entre contactos: usa un dato como [nombre] o variaciones como {Hola|Buenas|Qué tal}.');
-
-  const estado = programada ? 'programada' : (b.iniciar === '1' && req.user.can('envios.ejecutar') ? 'enviando' : 'borrador');
-  const [r] = await db.query('INSERT INTO campanas SET ?', [{
-    nombre, mensaje, tipo: 'texto', estado, programada_at: programada,
-    iniciada_at: estado === 'enviando' ? new Date() : null,
-    imagen_url: req.file ? `/uploads/${req.file.filename}` : null,
-    filtros: JSON.stringify(filtros), etapa_destino: destino, creado_por: req.user.id, contactos_cargados: 0,
-  }]);
-  await audit(req, 'campana_creada', { entidad: 'campana', entidadId: r.insertId, detalle: { nombre, tipo: 'texto', estado } });
-  emitir('campana:estado', { id: r.insertId, estado });
-  return { id: r.insertId, estado };
+  return { mensaje, tipo: 'texto', template_nombre: null, template_idioma: null, template_header: null, meta_plantilla_id: null, meta_variables: null };
 }
 
-// Vista previa de un mensaje de texto con un contacto de ejemplo (resuelve datos y variaciones)
-router.post('/vista-previa', requirePerm('campanas.ver'), ah(async (req, res) => {
-  const [[n]] = await db.query('SELECT n.*, u.nombre AS asignado_nombre FROM negocios n LEFT JOIN usuarios u ON u.id = n.asignado_a ORDER BY n.id DESC LIMIT 1');
-  const ejemplo = n || { nombre: 'Ferretería San Martín', contacto_nombre: 'María', distrito: 'Miraflores', provincia: 'Lima', departamento: 'Lima', rubro_busqueda: 'ferreterías' };
-  const m = String(req.body.mensaje || '').slice(0, 4096);
-  res.json({ ok: true, ejemplos: [0, 1, 2].map(() => queue.textoCampana(m, ejemplo)), contacto: ejemplo.nombre });
-}));
-
-// body (multipart): nombre, plantilla 'nombre|idioma', variables JSON [{tipo:'dato'|'fijo', valor}],
-//                   filtros JSON, etapa_destino, programada_at, iniciar ('1'), imagen (archivo)
-router.post('/', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(async (req, res) => {
-  const b = req.body || {};
-  const nombre = texto(b.nombre, 150);
-  if (!nombre) throw new HttpError(422, 'Ponle un nombre a la campaña.');
-
-  let filtros = {}, vars = [];
-  try { filtros = typeof b.filtros === 'string' ? JSON.parse(b.filtros || '{}') : (b.filtros || {}); } catch { throw new HttpError(422, 'Filtros inválidos.'); }
-  try { vars = typeof b.variables === 'string' ? JSON.parse(b.variables || '[]') : (b.variables || []); } catch { throw new HttpError(422, 'Variables inválidas.'); }
-
-  let programada = null;
-  if (b.programada_at) {
-    programada = new Date(b.programada_at);
-    if (Number.isNaN(programada.getTime())) throw new HttpError(422, 'Fecha de programación inválida.');
-    if (programada < new Date(Date.now() - 5 * 60000)) throw new HttpError(422, 'La fecha programada ya pasó.');
-  }
-
-  if (b.tipo === 'texto') {
-    const destinoTxt = b.etapa_destino && b.etapa_destino !== 'sin_cambio' ? String(b.etapa_destino) : null;
-    if (destinoTxt) { const [[e]] = await db.query('SELECT clave FROM etapas WHERE clave = ?', [destinoTxt]); if (!e) throw new HttpError(422, 'Etapa de destino inválida.'); }
-    filtros.maximo = entero(filtros.maximo, 5000, 1, 20000);
-    const r = await crearCampanaTexto(req, b, { nombre, filtros, programada, destino: destinoTxt });
-    return res.status(201).json({ ok: true, ...r });
-  }
-
+// Plantilla aprobada por Meta con el mapeo de sus datos variables
+async function validarPlantilla(b, vars, tieneImagen) {
   const [pNombre, pIdioma] = String(b.plantilla || '').split('|');
   if (!/^[a-z0-9_]{1,512}$/.test(pNombre || '')) throw new HttpError(422, 'Elige una plantilla aprobada.');
   const t = (await meta.plantillasMeta(pNombre)).find(x => x.name === pNombre && (!pIdioma || x.language === pIdioma));
@@ -138,7 +96,7 @@ router.post('/', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(
   if (t.status !== 'APPROVED') throw new HttpError(422, 'La plantilla todavía no está aprobada por Meta.');
   const vt = meta.vistaPlantilla(t);
   if (vt.header && !['TEXT', 'IMAGE'].includes(vt.header)) throw new HttpError(422, 'Las campañas usan plantillas de texto o con imagen (no video ni documento).');
-  if (vt.header === 'IMAGE' && !req.file) throw new HttpError(422, 'Esta plantilla lleva imagen en el encabezado: elige la imagen de la campaña.');
+  if (vt.header === 'IMAGE' && !tieneImagen) throw new HttpError(422, 'Esta plantilla lleva imagen en el encabezado: elige la imagen de la campaña.');
 
   if (vars.length < vt.variables) throw new HttpError(422, 'Indica qué va en cada dato variable de la plantilla.');
   const mapeo = [];
@@ -150,10 +108,6 @@ router.post('/', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(
   }
   const vista = vt.cuerpo.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => { const m = mapeo[n - 1]; return !m ? '' : m.tipo === 'dato' ? `[${m.valor}]` : m.valor; });
 
-  const destino = b.etapa_destino && b.etapa_destino !== 'sin_cambio' ? String(b.etapa_destino) : null;
-  if (destino) { const [[e]] = await db.query('SELECT clave FROM etapas WHERE clave = ?', [destino]); if (!e) throw new HttpError(422, 'Etapa de destino inválida.'); }
-  filtros.maximo = entero(filtros.maximo, 5000, 1, 20000);
-
   // Asegura la plantilla en la tabla local
   await db.query(`INSERT INTO wa_plantillas (nombre_meta, idioma, categoria, uso, encabezado_tipo, cuerpo, meta_template_id, estado, activo)
     VALUES (?,?,?, 'campana', ?, ?, ?, 'aprobada', 1)
@@ -162,19 +116,73 @@ router.post('/', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(
     [t.name, t.language, ['UTILITY', 'MARKETING', 'AUTHENTICATION'].includes(t.category) ? t.category : 'MARKETING',
      vt.header === 'IMAGE' ? 'imagen' : vt.header === 'TEXT' ? 'texto' : 'ninguno', vt.cuerpo, t.id]);
   const [[pl]] = await db.query('SELECT id FROM wa_plantillas WHERE nombre_meta = ? AND idioma = ?', [t.name, t.language]);
+  return { mensaje: vista, tipo: 'plantilla', template_nombre: t.name, template_idioma: t.language, template_header: vt.header,
+    meta_plantilla_id: pl.id, meta_variables: JSON.stringify(mapeo) };
+}
+
+// Valida el formulario (crear o editar) y devuelve las columnas de la campaña
+// body (multipart): nombre, tipo 'texto' + mensaje | plantilla 'nombre|idioma' + variables JSON [{tipo:'dato'|'fijo', valor}],
+//                   filtros JSON, etapa_destino, programada_at, iniciar ('1'), imagen (archivo), quitar_imagen ('1')
+async function armarCampana(req, anterior = null) {
+  const b = req.body || {};
+  const nombre = texto(b.nombre, 150);
+  if (!nombre) throw new HttpError(422, 'Ponle un nombre a la campaña.');
+
+  let filtros = {}, vars = [];
+  try { filtros = typeof b.filtros === 'string' ? JSON.parse(b.filtros || '{}') : (b.filtros || {}); } catch { throw new HttpError(422, 'Filtros inválidos.'); }
+  try { vars = typeof b.variables === 'string' ? JSON.parse(b.variables || '[]') : (b.variables || []); } catch { throw new HttpError(422, 'Variables inválidas.'); }
+  filtros.maximo = entero(filtros.maximo, 5000, 1, 20000);
+
+  let programada = null;
+  if (b.programada_at) {
+    programada = new Date(b.programada_at);
+    if (Number.isNaN(programada.getTime())) throw new HttpError(422, 'Fecha de programación inválida.');
+    if (programada < new Date(Date.now() - 5 * 60000)) throw new HttpError(422, 'La fecha programada ya pasó.');
+  }
+
+  const destino = b.etapa_destino && b.etapa_destino !== 'sin_cambio' ? String(b.etapa_destino) : null;
+  if (destino) { const [[e]] = await db.query('SELECT clave FROM etapas WHERE clave = ?', [destino]); if (!e) throw new HttpError(422, 'Etapa de destino inválida.'); }
+
+  // Imagen: la nueva reemplaza; al editar se conserva la anterior salvo que se quite
+  const imagen_url = req.file ? `/uploads/${req.file.filename}` : (anterior && b.quitar_imagen !== '1' ? anterior.imagen_url : null);
+  const contenido = b.tipo === 'texto' ? await validarTexto(b) : await validarPlantilla(b, vars, !!imagen_url);
 
   const estado = programada ? 'programada' : (b.iniciar === '1' && req.user.can('envios.ejecutar') ? 'enviando' : 'borrador');
-  const [r] = await db.query('INSERT INTO campanas SET ?', [{
-    nombre, mensaje: vista, tipo: 'plantilla', estado, programada_at: programada,
+  return {
+    nombre, ...contenido, estado, programada_at: programada, imagen_url,
     iniciada_at: estado === 'enviando' ? new Date() : null,
-    imagen_url: req.file ? `/uploads/${req.file.filename}` : null,
-    template_nombre: t.name, template_idioma: t.language, template_header: vt.header,
-    filtros: JSON.stringify(filtros), etapa_destino: destino, meta_plantilla_id: pl.id,
-    meta_variables: JSON.stringify(mapeo), creado_por: req.user.id, contactos_cargados: 0,
-  }]);
-  await audit(req, 'campana_creada', { entidad: 'campana', entidadId: r.insertId, detalle: { nombre, plantilla: t.name, estado } });
-  emitir('campana:estado', { id: r.insertId, estado });
-  res.status(201).json({ ok: true, id: r.insertId, estado });
+    filtros: JSON.stringify(filtros), etapa_destino: destino,
+  };
+}
+
+// Vista previa de un mensaje de texto con un contacto de ejemplo (resuelve datos y variaciones)
+router.post('/vista-previa', requirePerm('campanas.ver'), ah(async (req, res) => {
+  const [[n]] = await db.query('SELECT n.*, u.nombre AS asignado_nombre FROM negocios n LEFT JOIN usuarios u ON u.id = n.asignado_a ORDER BY n.id DESC LIMIT 1');
+  const ejemplo = n || { nombre: 'Ferretería San Martín', contacto_nombre: 'María', distrito: 'Miraflores', provincia: 'Lima', departamento: 'Lima', rubro_busqueda: 'ferreterías' };
+  const m = String(req.body.mensaje || '').slice(0, 4096);
+  res.json({ ok: true, ejemplos: [0, 1, 2].map(() => queue.textoCampana(m, ejemplo)), contacto: ejemplo.nombre });
+}));
+
+router.post('/', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(async (req, res) => {
+  const c = await armarCampana(req);
+  const [r] = await db.query('INSERT INTO campanas SET ?', [{ ...c, creado_por: req.user.id, contactos_cargados: 0 }]);
+  await audit(req, 'campana_creada', { entidad: 'campana', entidadId: r.insertId, detalle: { nombre: c.nombre, tipo: c.tipo, plantilla: c.template_nombre, estado: c.estado } });
+  emitir('campana:estado', { id: r.insertId, estado: c.estado });
+  res.status(201).json({ ok: true, id: r.insertId, estado: c.estado });
+}));
+
+// Editar: solo mientras no haya empezado a enviarse (borrador o programada)
+router.put('/:id', requirePerm('campanas.gestionar'), upload.single('imagen'), ah(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const [[ant]] = await db.query('SELECT id, estado, imagen_url, contactos_cargados FROM campanas WHERE id = ?', [id]);
+  if (!ant) throw new HttpError(404, 'Campaña no encontrada.');
+  if (!['borrador', 'programada'].includes(ant.estado) || Number(ant.contactos_cargados))
+    throw new HttpError(422, 'Solo se pueden editar campañas en borrador o programadas que aún no empezaron a enviarse.');
+  const c = await armarCampana(req, ant);
+  await db.query('UPDATE campanas SET ? WHERE id = ?', [c, id]);
+  await audit(req, 'campana_editada', { entidad: 'campana', entidadId: id, detalle: { nombre: c.nombre, estado: c.estado } });
+  emitir('campana:estado', { id, estado: c.estado });
+  res.json({ ok: true, id, estado: c.estado });
 }));
 
 const ACCIONES = {
