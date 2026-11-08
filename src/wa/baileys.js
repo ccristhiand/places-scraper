@@ -20,7 +20,7 @@ const log      = (...a) => console.log(new Date().toISOString(), '[whatsapp-qr]'
 
 // estado: desconectado | conectando | qr | codigo | conectado | bloqueado
 const st = { estado: 'desconectado', qr: null, codigo: null, numero: null, nombre: null, conectadoAt: null, ultimoError: null };
-let sock = null, intentos = 0, detenido = true, temporizador = null;
+let sock = null, intentos = 0, detenido = true, temporizador = null, fallos500 = 0;
 
 class BaileysError extends Error {
   constructor(msg, { temporal = false, fatal = false, sinWhatsapp = false } = {}) {
@@ -95,7 +95,7 @@ async function conectar({ telefono } = {}) {
       try { st.qr = await QRCode.toDataURL(qr, { margin: 1, width: 280 }); st.estado = 'qr'; publicar(); } catch (_) { /* QR inválido */ }
     }
     if (connection === 'open') {
-      intentos = 0;
+      intentos = 0; fallos500 = 0;
       const numero = B.jidNormalizedUser(actual.user?.id || '').split('@')[0];
       Object.assign(st, { estado: 'conectado', qr: null, codigo: null, numero, nombre: actual.user?.name || null, conectadoAt: new Date(), ultimoError: null });
       await registrarNumero(numero).catch(() => {});
@@ -106,6 +106,7 @@ async function conectar({ telefono } = {}) {
       const codigo = lastDisconnect?.error?.output?.statusCode;
       sock = null;
       const R = B.DisconnectReason;
+      fallos500 = codigo === R.badSession ? fallos500 + 1 : 0;
       if (codigo === R.loggedOut) {
         borrarSesion();
         Object.assign(st, { estado: 'desconectado', qr: null, codigo: null, ultimoError: 'La sesión se cerró desde el teléfono. Vuelve a vincular el número.' });
@@ -117,9 +118,11 @@ async function conectar({ telefono } = {}) {
       } else if (codigo === R.connectionReplaced) {
         Object.assign(st, { estado: 'desconectado', ultimoError: 'Se abrió otra sesión de WhatsApp Web con este número. Vuelve a conectar si quieres usarla aquí.' });
         detenido = true;
-      } else if (codigo === R.badSession) {
-        borrarSesion();
-        Object.assign(st, { estado: 'desconectado', ultimoError: 'La sesión guardada se dañó. Vuelve a vincular el número.' });
+      } else if (codigo === R.badSession && state.creds.me?.id && fallos500 >= 6) {
+        // 500 es también el código genérico de Baileys para cualquier error de red o de stream,
+        // así que solo se considera sesión dañada si se repite muchas veces seguidas sin llegar a conectar.
+        // No se borra .wa_auth: un corte de red no debe obligar a volver a escanear.
+        Object.assign(st, { estado: 'desconectado', qr: null, codigo: null, ultimoError: `WhatsApp cerró la conexión ${fallos500} veces seguidas (${lastDisconnect?.error?.message || 'error 500'}). Pulsa Conectar para reintentar; si sigue fallando, desvincula y vuelve a vincular el número.` });
         detenido = true;
       } else if (codigo === R.restartRequired) {
         intentos = 0;
@@ -133,7 +136,7 @@ async function conectar({ telefono } = {}) {
         st.estado = 'conectando';
         programarReconexion();
       }
-      log(`Conexión cerrada (código ${codigo}) → ${st.estado}`);
+      log(`Conexión cerrada (código ${codigo}: ${lastDisconnect?.error?.message || 'sin detalle'}) → ${st.estado}`);
       publicar();
     }
   });
