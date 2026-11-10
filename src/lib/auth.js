@@ -49,6 +49,11 @@ const PERMISOS = {
     'proyectos.montos':    'Ver montos, plan de pagos, rentabilidad y registrar cobros',
     'proyectos.trabajar':  'Completar hitos, registrar horas y atender incidencias',
   },
+  'Suscripciones SaaS': {
+    'suscripciones.ver':       'Ver suscripciones de clientes',
+    'suscripciones.gestionar': 'Crear y editar suscripciones, planes e integraciones',
+    'suscripciones.cobros':    'Ver montos y registrar pagos de suscripciones',
+  },
   'Leads': {
     'leads.ver':       'Ver leads del formulario web',
     'leads.gestionar': 'Gestionar y convertir leads',

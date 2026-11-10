@@ -489,6 +489,95 @@ async function migrar({ log = console.log } = {}) {
     FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE
   ) ${T}`);
 
+  // ── Suscripciones SaaS (registro manual, sin cobros automáticos) ───────
+  // Catálogo: productos → planes (precio por ciclo) + integraciones opcionales (ej. API RENIEC)
+  await conn.query(`CREATE TABLE IF NOT EXISTS saas_productos (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    nombre      VARCHAR(120) NOT NULL,
+    descripcion TEXT NULL,
+    url         VARCHAR(500) NULL,
+    activo      TINYINT(1) DEFAULT 1,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ${T}`);
+  await conn.query(`CREATE TABLE IF NOT EXISTS saas_planes (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id       INT NOT NULL,
+    nombre            VARCHAR(80) NOT NULL,
+    moneda            VARCHAR(3) DEFAULT 'PEN',
+    precio_mensual    DECIMAL(12,2) NOT NULL DEFAULT 0,
+    precio_trimestral DECIMAL(12,2) NULL,
+    precio_anual      DECIMAL(12,2) NULL,
+    incluye           TEXT NULL,
+    orden             INT DEFAULT 0,
+    activo            TINYINT(1) DEFAULT 1,
+    FOREIGN KEY (producto_id) REFERENCES saas_productos(id) ON DELETE CASCADE
+  ) ${T}`);
+  await conn.query(`CREATE TABLE IF NOT EXISTS saas_integraciones (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id    INT NULL,
+    nombre         VARCHAR(120) NOT NULL,
+    descripcion    TEXT NULL,
+    precio_mensual DECIMAL(12,2) NOT NULL DEFAULT 0,
+    activo         TINYINT(1) DEFAULT 1,
+    FOREIGN KEY (producto_id) REFERENCES saas_productos(id) ON DELETE CASCADE
+  ) ${T}`);
+  // Estados (manuales): activa · suspendida · cancelada
+  await conn.query(`CREATE TABLE IF NOT EXISTS suscripciones (
+    id                 INT AUTO_INCREMENT PRIMARY KEY,
+    codigo             VARCHAR(20) NOT NULL UNIQUE,
+    negocio_id         INT NOT NULL,
+    plan_id            INT NOT NULL,
+    proyecto_id        INT NULL,
+    ciclo              VARCHAR(15) DEFAULT 'mensual',
+    moneda             VARCHAR(3) DEFAULT 'PEN',
+    precio_especial    DECIMAL(12,2) NULL,
+    descuento_pct      DECIMAL(5,2) DEFAULT 0,
+    incluye_igv        TINYINT(1) DEFAULT 1,
+    estado             VARCHAR(20) DEFAULT 'activa',
+    fecha_inicio       DATE NOT NULL,
+    responsable_id     INT NULL,
+    notas              TEXT NULL,
+    motivo_cancelacion VARCHAR(300) NULL,
+    cancelada_at       DATE NULL,
+    creado_por         INT NULL,
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE,
+    FOREIGN KEY (plan_id) REFERENCES saas_planes(id),
+    INDEX idx_sus_estado (estado),
+    INDEX idx_sus_neg (negocio_id)
+  ) ${T}`);
+  await conn.query(`CREATE TABLE IF NOT EXISTS suscripcion_integraciones (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    suscripcion_id INT NOT NULL,
+    integracion_id INT NOT NULL,
+    precio_mensual DECIMAL(12,2) NOT NULL DEFAULT 0,
+    activo         TINYINT(1) DEFAULT 1,
+    fecha_alta     DATE NULL,
+    fecha_baja     DATE NULL,
+    UNIQUE KEY uq_sus_int (suscripcion_id, integracion_id),
+    FOREIGN KEY (suscripcion_id) REFERENCES suscripciones(id) ON DELETE CASCADE,
+    FOREIGN KEY (integracion_id) REFERENCES saas_integraciones(id)
+  ) ${T}`);
+  // Cada pago indica qué periodo cubre: así se sabe hasta cuándo está pagado el cliente
+  await conn.query(`CREATE TABLE IF NOT EXISTS suscripcion_pagos (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    suscripcion_id  INT NOT NULL,
+    periodo_inicio  DATE NOT NULL,
+    periodo_fin     DATE NOT NULL,
+    monto           DECIMAL(12,2) NOT NULL,
+    fecha           DATE NOT NULL,
+    metodo          VARCHAR(30) DEFAULT 'transferencia',
+    referencia      VARCHAR(150) NULL,
+    comprobante_url VARCHAR(500) NULL,
+    notas           VARCHAR(300) NULL,
+    registrado_por  INT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (suscripcion_id) REFERENCES suscripciones(id) ON DELETE CASCADE,
+    INDEX idx_sus_pago (suscripcion_id, periodo_fin)
+  ) ${T}`);
+  await addCol('crm_historial', 'suscripcion_id', 'INT NULL');
+
   await conn.query(`CREATE TABLE IF NOT EXISTS notificaciones (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     usuario_id INT NOT NULL,
@@ -545,6 +634,7 @@ async function migrar({ log = console.log } = {}) {
     'chat.ver', 'chat.enviar', 'campanas.ver', 'envios.ver', 'agenda.ver', 'agenda.gestionar',
     'tareas.ver', 'tareas.gestionar', 'leads.ver', 'prospeccion.buscar',
     'proyectos.ver', 'proyectos.gestionar', 'proyectos.montos',
+    'suscripciones.ver', 'suscripciones.gestionar', 'suscripciones.cobros',
   ];
   const lectura = TODOS.filter(p => p.endsWith('.ver') && !['config.ver', 'auditoria.ver'].includes(p)).concat('contactos.ver_todos');
   const roles = [
@@ -587,6 +677,21 @@ async function migrar({ log = console.log } = {}) {
        JSON.stringify(['dashboard.ver', 'proyectos.ver', 'proyectos.trabajar', 'tareas.ver', 'tareas.gestionar', 'agenda.ver', 'contactos.ver', 'contactos.ver_todos'])]);
     await conn.query("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('mig_permisos_proyectos_2', '1', 'Migración aplicada')");
     log('  + permiso proyectos.trabajar y rol Desarrollador');
+  }
+
+  // Permisos del módulo Suscripciones SaaS en los roles que ya existían (una sola vez)
+  const [[migSus]] = await conn.query("SELECT 1 AS ok FROM configuracion WHERE clave = 'mig_permisos_suscripciones'");
+  if (!migSus) {
+    const todos = ['suscripciones.ver', 'suscripciones.gestionar', 'suscripciones.cobros'];
+    for (const [nombre, nuevos] of [['Supervisor', todos], ['Vendedor', todos], ['Solo lectura', ['suscripciones.ver']]]) {
+      const [[r]] = await conn.query('SELECT id, permisos FROM roles WHERE nombre = ?', [nombre]);
+      if (!r) continue;
+      let p = []; try { p = JSON.parse(r.permisos); } catch { p = []; }
+      if (p.includes('*')) continue;
+      await conn.query('UPDATE roles SET permisos = ? WHERE id = ?', [JSON.stringify([...new Set([...p, ...nuevos])]), r.id]);
+    }
+    await conn.query("INSERT INTO configuracion (clave, valor, descripcion) VALUES ('mig_permisos_suscripciones', '1', 'Migración aplicada')");
+    log('  + permisos de Suscripciones agregados a los roles');
   }
 
   const [[{ n: nUsuarios }]] = await conn.query('SELECT COUNT(*) AS n FROM usuarios');

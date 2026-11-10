@@ -28,6 +28,36 @@ class BaileysError extends Error {
   }
 }
 
+// ── Reintentos de cifrado ─────────────────────────────────────────────────
+// Si el teléfono destino no puede descifrar un mensaje ("Esperando mensaje…"), pide un reenvío
+// y Baileys llama a getMessage(key). Sin el contenido original el reenvío no ocurre y el mensaje
+// queda atascado para siempre. Por eso se guardan los mensajes enviados (memoria + respaldo en BD).
+const ENVIADOS_MAX = 5000, ENVIADOS_TTL = 48 * 3600e3;
+const enviados = new Map(); // id → { message, at }
+function guardarEnviado(r) {
+  if (!r?.key?.id || !r.message) return;
+  enviados.set(r.key.id, { message: r.message, at: Date.now() });
+  if (enviados.size > ENVIADOS_MAX) enviados.delete(enviados.keys().next().value);
+}
+async function obtenerMensaje(key) {
+  const hit = enviados.get(key?.id);
+  if (hit && Date.now() - hit.at < ENVIADOS_TTL) return hit.message;
+  // Tras un reinicio: los textos se pueden reconstruir desde la conversación guardada
+  try {
+    const [[m]] = await db.query("SELECT tipo, contenido FROM chat_mensajes WHERE wa_id = ? AND direccion = 'saliente' LIMIT 1", [key?.id]);
+    if (m && m.tipo === 'texto' && m.contenido) return { conversation: m.contenido };
+  } catch (e) { log('getMessage:', e.message); }
+  return undefined;
+}
+// Contador de reintentos por mensaje (compartido entre reconexiones para no reintentar sin fin)
+const reintentos = new Map();
+const msgRetryCounterCache = {
+  get: k => reintentos.get(k),
+  set: (k, v) => { reintentos.set(k, v); if (reintentos.size > 5000) reintentos.delete(reintentos.keys().next().value); },
+  del: k => { reintentos.delete(k); },
+  flushAll: () => reintentos.clear(),
+};
+
 function vista() { return { ...st }; }
 function publicar() { emitir('baileys:estado', vista()); }
 const haySesion = () => fs.existsSync(path.join(AUTH_DIR, 'creds.json'));
@@ -65,6 +95,10 @@ function programarReconexion() {
 
 async function conectar({ telefono } = {}) {
   if (sock && ['conectado', 'conectando', 'qr', 'codigo'].includes(st.estado)) return vista();
+  // Cancela una reconexión pendiente: si no, abriría un segundo socket con las mismas credenciales,
+  // WhatsApp cerraría ambos (connectionReplaced) y las claves de cifrado podrían desincronizarse.
+  clearTimeout(temporizador);
+  if (sock) { try { sock.end(undefined); } catch (_) { /* ya cerrado */ } sock = null; }
   detenido = false;
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   const { state, saveCreds } = await B.useMultiFileAuthState(AUTH_DIR);
@@ -83,7 +117,8 @@ async function conectar({ telefono } = {}) {
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
     connectTimeoutMs: 60000, keepAliveIntervalMs: 25000, retryRequestDelayMs: 2500,
-    getMessage: async () => undefined,
+    getMessage: obtenerMensaje,
+    msgRetryCounterCache,
   });
   const actual = sock;
 
@@ -126,7 +161,8 @@ async function conectar({ telefono } = {}) {
         detenido = true;
       } else if (codigo === R.restartRequired) {
         intentos = 0;
-        setTimeout(() => conectar().catch(e => log(e.message)), 1000);
+        clearTimeout(temporizador);
+        temporizador = setTimeout(() => { if (!detenido) conectar().catch(e => log(e.message)); }, 1000);
       } else if (!state.creds.me?.id && !state.creds.registered && intentos >= 4) {
         // Sin sesión vinculada (QR nunca escaneado). Ojo: con QR Baileys deja registered = false
         // aunque la sesión sea válida; por eso se mira creds.me, que sí existe tras escanear.
@@ -283,6 +319,7 @@ async function enviarTexto(destino, texto, { escritura = true } = {}) {
   try {
     if (escritura) await simularEscritura(jid, texto);
     const r = await sock.sendMessage(jid, { text: String(texto) });
+    guardarEnviado(r);
     return { id: r?.key?.id || null };
   } catch (e) { throw traducir(e); }
 }
@@ -293,6 +330,7 @@ async function enviarImagen(destino, ruta, caption, { escritura = true } = {}) {
   try {
     if (escritura) await simularEscritura(jid, caption);
     const r = await sock.sendMessage(jid, { image: fs.readFileSync(ruta), caption: caption || undefined });
+    guardarEnviado(r);
     return { id: r?.key?.id || null };
   } catch (e) { throw traducir(e); }
 }

@@ -79,6 +79,7 @@ app.use('/api/campanas',  require('./routes/campanas'));
 app.use('/api/envios',    require('./routes/envios'));
 app.use('/api/whatsapp',  require('./routes/whatsapp'));
 app.use('/api/proyectos', require('./routes/proyectos'));
+app.use('/api/suscripciones', require('./routes/suscripciones'));
 app.use('/api/leads',     leads.router);
 app.use('/api/config',    require('./routes/config'));
 app.use('/api/ubigeo',    require('./routes/ubigeo'));
@@ -137,9 +138,14 @@ io.on('connection', socket => {
     console.error('❌ No se pudo preparar la base de datos:', e.message);
     process.exit(1);
   }
-  require('./scheduler').iniciar();
-  // WhatsApp QR: reconecta si es el proveedor activo y hay sesión guardada
-  require('./wa/baileys').iniciarSiCorresponde().catch(e => console.error('WhatsApp QR:', e.message));
+  // CRM_SIN_TAREAS=1: para pruebas locales contra la BD real (no envía campañas ni conecta WhatsApp QR)
+  if (process.env.CRM_SIN_TAREAS === '1') {
+    console.log('⚠️ CRM_SIN_TAREAS=1: scheduler y WhatsApp QR desactivados');
+  } else {
+    require('./scheduler').iniciar();
+    // WhatsApp QR: reconecta si es el proveedor activo y hay sesión guardada
+    require('./wa/baileys').iniciarSiCorresponde().catch(e => console.error('WhatsApp QR:', e.message));
+  }
   server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`🚀 CRM corriendo en http://localhost:${PORT}`);
   });

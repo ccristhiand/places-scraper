@@ -8,6 +8,13 @@
       "port": 3010
     },
     {
+      "name": "crm-prueba",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["src/server.js"],
+      "env": { "PORT": "3012", "CRM_SIN_TAREAS": "1", "NODE_ENV": "development" },
+      "port": 3012
+    },
+    {
       "name": "crm-3011",
       "runtimeExecutable": "node",
       "runtimeArgs": ["src/server.js"],

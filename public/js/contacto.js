@@ -2,6 +2,7 @@
 import { html, raw, icon, api, $, render, acciones, toast, toastError, confirmar, fmt, etapas, etapaBadge, avatar, can, cargando, vacio, opciones, conCarga, menu } from './core.js';
 import { formContacto, formTarea, formReunion, enlaceWa, TIPO_ACTIVIDAD } from './ui.js';
 import { formProyecto, abrirProyecto, estadoBadge, dinero, fechaCorta, TIPOS } from './proyecto.js';
+import { formSuscripcion, abrirSuscripcion } from './views/suscripciones.js';
 
 export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
   const ov = document.createElement('div');
@@ -47,7 +48,7 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
         <button class="btn btn-sm btn-ghost btn-icon right" data-act="mas" aria-label="Más acciones">${icon('more')}</button>
       </div>
       <div class="tabs" style="margin:10px 0 0;border:0">
-        ${[['resumen', 'Resumen'], ['actividad', 'Actividad'], ['tareas', `Tareas${cuentas.tareas ? ` (${cuentas.tareas})` : ''}`], ['reuniones', `Reuniones${cuentas.reuniones ? ` (${cuentas.reuniones})` : ''}`], ...(can('proyectos.ver') ? [['proyectos', 'Proyectos']] : [])]
+        ${[['resumen', 'Resumen'], ['actividad', 'Actividad'], ['tareas', `Tareas${cuentas.tareas ? ` (${cuentas.tareas})` : ''}`], ['reuniones', `Reuniones${cuentas.reuniones ? ` (${cuentas.reuniones})` : ''}`], ...(can('proyectos.ver') ? [['proyectos', 'Proyectos']] : []), ...(can('suscripciones.ver') ? [['suscripciones', 'Suscripciones']] : [])]
           .map(([k, t]) => html`<button class="tab ${actual === k ? 'active' : ''}" data-act="tab" data-tab="${k}">${t}</button>`)}
       </div></div>`;
   }
@@ -146,6 +147,21 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
         : vacio({ icono: 'layers', titulo: 'Sin proyectos', texto: 'Registra aquí los desarrollos que le vendes a este cliente.' })}`);
   }
 
+  async function suscripciones(cont) {
+    const { rows } = await api.get('/api/suscripciones', { negocio_id: id });
+    const montos = can('suscripciones.cobros');
+    const CIC = { mensual: 'Mensual', trimestral: 'Trimestral', anual: 'Anual' };
+    const EST = { activa: ['success', 'Activa'], suspendida: ['warning', 'Suspendida'], cancelada: ['', 'Cancelada'] };
+    render(cont, html`
+      ${can('suscripciones.gestionar') ? html`<div class="row mb"><button class="btn btn-primary btn-sm right" data-act="nueva-suscripcion">${icon('plus', 'sm')} Nueva suscripción</button></div>` : ''}
+      ${rows.length ? html`<div class="card">${rows.map(s => html`<a href="#" class="list-item" data-act="ver-suscripcion" data-id="${s.id}">
+        <div class="grow"><div class="row"><span class="strong">${s.producto_nombre} · ${s.plan_nombre}</span><span class="badge ${(EST[s.estado] || [''])[0]}">${(EST[s.estado] || ['', s.estado])[1]}</span></div>
+          <div class="xs muted"><span class="mono">${s.codigo}</span> · ${CIC[s.ciclo]}${s.pagado_hasta ? ` · pagado hasta ${fechaCorta(s.pagado_hasta)}` : ' · sin pagos'}</div></div>
+        ${montos ? html`<div class="small num" style="text-align:right"><div class="strong">${dinero(s.monto_ciclo, s.moneda)}</div>
+          ${s.estado === 'activa' && s.periodos_sin_pago ? html`<div class="xs" style="color:var(--warning)">${s.periodos_sin_pago} periodo(s) sin pago</div>` : ''}</div>` : ''}</a>`)}</div>`
+        : vacio({ icono: 'refresh', titulo: 'Sin suscripciones', texto: 'Registra el plan de tu SaaS que tiene este cliente y sus pagos.' })}`);
+  }
+
   async function reuniones(cont) {
     const { rows } = await api.get('/api/agenda', { negocio_id: id });
     render(cont, html`
@@ -166,6 +182,7 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
       if (actual === 'tareas') await tareas(cont);
       if (actual === 'reuniones') await reuniones(cont);
       if (actual === 'proyectos') await proyectos(cont);
+      if (actual === 'suscripciones') await suscripciones(cont);
     } catch (e) { toastError(e); }
     $('[data-etapa]', drawer)?.addEventListener('change', async e => {
       const etapa = e.target.value;
@@ -201,6 +218,8 @@ export async function abrirContacto(id, { onCambio, tab = 'resumen' } = {}) {
     'nueva-tarea': async () => { if (await formTarea(null, { negocio: c })) { cambiado = true; await cargar(); pintar(); toast('Tarea creada'); } },
     'nuevo-proyecto': async () => { if (await formProyecto(null, { negocio: c })) { cambiado = true; pintar(); } },
     'ver-proyecto': b => abrirProyecto(b.dataset.id, { onCambio: () => { cambiado = true; pintar(); } }),
+    'nueva-suscripcion': () => formSuscripcion(null, { negocio: c, onGuardado: () => { cambiado = true; pintar(); } }),
+    'ver-suscripcion': b => abrirSuscripcion(b.dataset.id, { onCambio: () => { cambiado = true; pintar(); } }),
     'nueva-reunion': async () => { if (await formReunion(null, { negocio: c })) { cambiado = true; await cargar(); pintar(); toast('Reunión agendada'); } },
   });
   drawer.addEventListener('change', async e => {
